@@ -1,0 +1,122 @@
+<!-- Hero Banner -->
+<tr>
+  <td style="padding: 16px 24px 0 24px; background-color: #ffffff;" class="p-mobile">
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background: #1b3c53; background: linear-gradient(135deg, #1b3c53 0%, #174251 100%); border-radius: 16px; overflow: hidden;">
+      <tr>
+        <td width="65%" valign="middle" style="padding: 32px 20px 32px 28px;" class="p-mobile">
+          <div style="display: inline-block; background-color: rgba(245, 166, 35, 0.2); border: 1px solid rgba(245, 166, 35, 0.4); color: #f5a623; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; margin-bottom: 10px;">
+            Billing Statement
+          </div>
+          <h1 class="hero-title" style="margin: 0; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; font-size: 24px; font-weight: 900; color: #ffffff; line-height: 1.2; text-transform: uppercase;">
+            Invoice<br>
+            <span style="color: #f5a623;">{{invoiceNumber}}</span>
+          </h1>
+          <p style="margin: 8px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #cbd5e1;">
+            {{#if isPaid}}Status: <span style="color: #4ade80; font-weight: 700;">PAID</span>{{else}}Status: <span style="color: #f5a623; font-weight: 700;">PAYMENT DUE</span>{{/if}}
+          </p>
+        </td>
+        <td width="35%" valign="middle" align="center" style="padding: 20px 20px 20px 0;">
+          <div style="width: 64px; height: 64px; background-color: rgba(245, 166, 35, 0.15); border: 2px solid #f5a623; border-radius: 50%; text-align: center; line-height: 64px; font-size: 28px;" aria-hidden="true">
+            🧾
+          </div>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- Body Content -->
+<tr>
+  <td style="padding: 32px 36px 20px 36px; background-color: #ffffff;" class="p-mobile">
+    <p style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #334155; line-height: 1.6;">
+      Dear <strong>{{clientName}}</strong>,
+    </p>
+    <p style="margin: 0 0 20px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #475569; line-height: 1.6;">
+      Here is your official invoice from <strong>Farmanullah Ansari Company</strong> for the billing period ending <strong>{{formatDate issueDate}}</strong>.
+    </p>
+
+    <!-- Invoice Summary Box -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+      <tr>
+        <td width="50%" style="padding: 14px 18px; border-right: 1px solid #e2e8f0;">
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Issue Date</div>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px;">{{formatDate issueDate}}</div>
+        </td>
+        <td width="50%" style="padding: 14px 18px;">
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Due Date</div>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 2px;">{{formatDate dueDate}}</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Itemized Billing Table -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+      <thead>
+        <tr style="background-color: #102a43; color: #ffffff;">
+          <th align="left" style="padding: 10px 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 6px 0 0 0;">Description</th>
+          <th align="center" style="padding: 10px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase;">Qty</th>
+          <th align="right" style="padding: 10px 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase; border-radius: 0 6px 0 0;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each items}}
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 12px 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1e293b; font-weight: 600;">{{this.description}}</td>
+          <td align="center" style="padding: 12px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #64748b;">{{this.quantity}}</td>
+          <td align="right" style="padding: 12px 14px; font-family: Consolas, monospace; font-size: 13px; color: #0f172a; font-weight: 700;">{{formatCurrency this.amount}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+
+    <!-- Totals Table -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px;">
+      <tr>
+        <td width="55%">&nbsp;</td>
+        <td width="45%">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="padding: 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #64748b;">Subtotal:</td>
+              <td align="right" style="padding: 6px 0; font-family: Consolas, monospace; font-size: 13px; color: #334155; font-weight: 600;">{{formatCurrency subtotal}}</td>
+            </tr>
+            {{#if tax}}
+            <tr>
+              <td style="padding: 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #64748b;">Tax / VAT:</td>
+              <td align="right" style="padding: 6px 0; font-family: Consolas, monospace; font-size: 13px; color: #334155; font-weight: 600;">{{formatCurrency tax}}</td>
+            </tr>
+            {{/if}}
+            <tr style="border-top: 2px solid #102a43;">
+              <td style="padding: 10px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 800; color: #102a43;">Total Amount:</td>
+              <td align="right" style="padding: 10px 0 0 0; font-family: Consolas, monospace; font-size: 16px; font-weight: 900; color: #102a43;">{{formatCurrency total}}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Action Button: Download / Pay -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 20px 0 10px 0;">
+      <tr>
+        <td align="center">
+          <!--[if mso]>
+          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{#if paymentUrl}}{{paymentUrl}}{{else}}#{{/if}}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="50%" stroke="f" fillcolor="#f5a623">
+            <w:anchorlock/>
+            <center style="color:#102a43;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;font-weight:bold;letter-spacing:0.08em;">VIEW / PAY INVOICE &rarr;</center>
+          </v:roundrect>
+          <![endif]-->
+          <!--[if !mso]><!-->
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center" style="border-radius: 30px; background: #f5a623; background: linear-gradient(135deg, #f5a623 0%, #e08e0b 100%); box-shadow: 0 4px 14px rgba(245, 166, 35, 0.4); mso-padding-alt: 0;">
+                <a href="{{#if paymentUrl}}{{paymentUrl}}{{else}}#{{/if}}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 14px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 800; color: #102a43; text-decoration: none; text-transform: uppercase; letter-spacing: 0.08em; border-radius: 30px;">
+                  View / Pay Invoice &rarr;
+                </a>
+              </td>
+            </tr>
+          </table>
+          <!--<![endif]-->
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>

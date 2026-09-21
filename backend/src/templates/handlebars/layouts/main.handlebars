@@ -1,11 +1,27 @@
-<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
   <title>{{#if subject}}{{subject}}{{else}}Farmanullah Ansari Company{{/if}}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
   <style type="text/css">
+    :root {
+      color-scheme: light dark;
+      supported-color-schemes: light dark;
+    }
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
@@ -37,20 +53,32 @@
         direction: ltr !important;
       }
     }
+    @media (prefers-color-scheme: dark) {
+      .bg-dark-body { background-color: #0d2530 !important; }
+      .bg-dark-card { background-color: #112d3b !important; border-color: #1d4357 !important; }
+      .text-dark-primary { color: #f1f5f9 !important; }
+      .text-dark-secondary { color: #94a3b8 !important; }
+    }
   </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #174251;">
   {{#if preheader}}
   <div style="display: none; font-size: 1px; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
     {{preheader}}
+    {{preheaderPadding}}
   </div>
   {{/if}}
 
-  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(180deg, #174251 0%, #102e38 100%); min-height: 100vh;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(180deg, #174251 0%, #102e38 100%); min-height: 100vh;">
     <tr>
       <td align="center" style="padding: 40px 12px;">
+        <!--[if mso]>
+        <table role="presentation" align="center" border="0" cellspacing="0" cellpadding="0" width="580">
+        <tr>
+        <td align="center" valign="top" width="580">
+        <![endif]-->
         <!-- Email Card Container -->
-        <table border="0" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width: 580px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width: 580px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);">
           
           {{> navBar}}
 
@@ -60,6 +88,11 @@
           {{> footer}}
 
         </table>
+        <!--[if mso]>
+        </td>
+        </tr>
+        </table>
+        <![endif]-->
       </td>
     </tr>
   </table>

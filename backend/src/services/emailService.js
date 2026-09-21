@@ -300,7 +300,7 @@ export async function sendInvoiceEmail({
  * Dispatches an email rendered via the Handlebars dynamic template engine.
  */
 export async function sendHandlebarsEmail({ template, data = {}, to, subject, replyTo, userId, category, metadata }) {
-  const rendered = renderHandlebarsTemplate(template, data);
+  const rendered = renderHandlebarsTemplate(template, { recipient: to, ...data });
   return sendEmail({
     to,
     subject: subject || rendered.subject,

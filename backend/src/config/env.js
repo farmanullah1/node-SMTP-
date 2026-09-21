@@ -1,6 +1,29 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Check candidate .env paths: process.cwd(), backend root, and project workspace root
+const candidateEnvPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../../.env'),
+];
+
+let envLoaded = false;
+for (const envPath of candidateEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    envLoaded = true;
+    break;
+  }
+}
+if (!envLoaded) {
+  dotenv.config();
+}
 
 /**
  * Validated Environment Configuration

@@ -1,0 +1,93 @@
+<!-- Corporate Links & Social Media Footer -->
+<tr>
+  <td style="padding: 28px 36px 20px 36px; background-color: #ffffff; border-top: 1px solid #edf2f7;" class="p-mobile">
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <!-- Quick Links -->
+        <td width="50%" valign="top" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="font-size: 12px; font-weight: 700; color: #102a43; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+            Quick Links
+          </div>
+          <div style="font-size: 13px; line-height: 1.8;">
+            <a href="{{#if portalUrl}}{{portalUrl}}{{else}}#{{/if}}" style="color: #486581; text-decoration: underline;">Company Portal</a><br>
+            <a href="{{#if supportUrl}}{{supportUrl}}{{else}}#{{/if}}" style="color: #486581; text-decoration: underline;">Support Center</a>
+          </div>
+        </td>
+        <!-- Resources -->
+        <td width="50%" valign="top" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="font-size: 12px; font-weight: 700; color: #102a43; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+            Resources
+          </div>
+          <div style="font-size: 13px; line-height: 1.8;">
+            <a href="#" style="color: #486581; text-decoration: underline;">Latest News</a><br>
+            <a href="#" style="color: #486581; text-decoration: underline;">Our Story</a>
+          </div>
+        </td>
+      </tr>
+      <!-- Social Icons Row -->
+      <tr>
+        <td colspan="2" align="center" style="padding-top: 24px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding: 0 8px;">
+                <a href="#" aria-label="Facebook" style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background-color: #102a43; color: #ffffff; border-radius: 50%; text-decoration: none; font-size: 13px; font-weight: bold;">f</a>
+              </td>
+              <td style="padding: 0 8px;">
+                <a href="#" aria-label="X (formerly Twitter)" style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background-color: #102a43; color: #ffffff; border-radius: 50%; text-decoration: none; font-size: 12px; font-weight: bold;">𝕏</a>
+              </td>
+              <td style="padding: 0 8px;">
+                <a href="#" aria-label="Instagram" style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background-color: #102a43; color: #ffffff; border-radius: 50%; text-decoration: none; font-size: 13px;">📷</a>
+              </td>
+              <td style="padding: 0 8px;">
+                <a href="#" aria-label="Media Channel" style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background-color: #102a43; color: #ffffff; border-radius: 50%; text-decoration: none; font-size: 12px;">🎵</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+
+<!-- Bottom Formal Corporate Disclaimer -->
+<tr>
+  <td style="padding: 28px 36px; background-color: #f0f4f8; text-align: center; border-top: 1px solid #d9e2ec;" class="p-mobile bg-dark-subtle">
+    <div style="display: inline-block; margin-bottom: 10px;" aria-hidden="true">
+      <span style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 20px; font-weight: 900; color: #102a43; letter-spacing: -1px;">FA</span>
+    </div>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 800; color: #102a43; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+      {{#if companyName}}{{companyName}}{{else}}Farmanullah Ansari Company{{/if}}
+    </div>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #627d98; line-height: 1.6;">
+      {{#if companyAddress}}{{companyAddress}}{{else}}123 Business Avenue, Suite 400, Karachi, Pakistan{{/if}}<br>
+      Contact: {{#if companyPhone}}{{companyPhone}}{{else}}+92-300-1234567{{/if}} &bull; 
+      <a href="mailto:{{#if supportEmail}}{{supportEmail}}{{else}}contact@farmanullahansari.com{{/if}}" style="color: #627d98; text-decoration: underline;">
+        {{#if supportEmail}}{{supportEmail}}{{else}}contact@farmanullahansari.com{{/if}}
+      </a>
+    </div>
+
+    <!-- Recipient Attribution & Legal Notice -->
+    {{#if recipient}}
+    <div style="margin-top: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #829ab1;">
+      Sent to <strong style="color: #486581;">{{recipient}}</strong> regarding your account security.
+    </div>
+    {{/if}}
+
+    <!-- Policy & Unsubscribe Links -->
+    <div style="margin-top: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px;">
+      {{#if isTransactional}}
+        <span style="color: #829ab1;">This is a mandatory service notification.</span> &bull;
+      {{else}}
+        {{#if unsubscribeUrl}}
+          <a href="{{unsubscribeUrl}}" style="color: #627d98; text-decoration: underline;">Unsubscribe</a> &bull;
+        {{/if}}
+      {{/if}}
+      <a href="{{#if privacyUrl}}{{privacyUrl}}{{else}}#{{/if}}" style="color: #627d98; text-decoration: underline;">Privacy Policy</a> &bull;
+      <a href="{{#if termsUrl}}{{termsUrl}}{{else}}#{{/if}}" style="color: #627d98; text-decoration: underline;">Terms of Service</a>
+    </div>
+
+    <div style="margin-top: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10px; color: #829ab1;">
+      &copy; {{currentYear}} {{#if companyName}}{{companyName}}{{else}}Farmanullah Ansari Company{{/if}}. All rights reserved.
+    </div>
+  </td>
+</tr>

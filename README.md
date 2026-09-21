@@ -3,6 +3,7 @@
 A production-grade, educational Node.js backend project built for mastering **SMTP email delivery**, **Nodemailer architecture**, **JWT user authentication**, **MSSQL persistence with Sequelize**, and **defensive engineering**.
 
 Built with:
+
 * **Node.js (ESM - `"type": "module"` )**
 * **Express 4** with **Helmet** & **CORS**
 * **Nodemailer 6** (Connection pooling, timeouts, Ethereal auto-fallback)
@@ -48,42 +49,37 @@ npm start
 
 ## 2. Architecture & Subsystems
 
-```
+```text
 smtp-nodemailer-lab/
-├── src/
-│   ├── config/
-│   │   ├── database.js          # MSSQL auto-creation, pooling & Sequelize ORM
-│   │   ├── imagekit.js          # ImageKit CDN SDK singleton
-│   │   ├── jwt.js               # JWT signing & verification
-│   │   └── mailer.js            # Nodemailer transport, pooling & Ethereal fallback
-│   ├── controllers/
-│   │   ├── auth.controller.js   # Register, verify-email, login, me, reset-password
-│   │   └── email.controller.js  # Send text, html, template, attachment, bulk & logs
-│   ├── middleware/
-│   │   ├── asyncHandler.js      # Global async/await error forwarder
-│   │   ├── auth.middleware.js   # authenticate (JWT), authorize (RBAC), optionalAuth
-│   │   ├── errorHandler.js      # Standardized SMTP and HTTP error mapper
-│   │   └── rateLimiter.js       # Auth, email, and API rate limiters
-│   ├── models/
-│   │   ├── EmailLog.js          # Audit schema for every email sent
-│   │   ├── User.js              # User schema with bcrypt hooks and safe JSON
-│   │   └── index.js             # Model associations and sync
-│   ├── routes/
-│   │   ├── auth.routes.js       # /api/auth
-│   │   ├── email.routes.js      # /api/email
-│   │   └── media.routes.js      # /api/media
-│   ├── services/
-│   │   └── emailService.js      # Core email dispatcher, template delivery & audit logs
-│   ├── templates/
-│   │   ├── authEmails.js        # Responsive verification and password reset templates
-│   │   └── welcomeEmail.js      # Responsive HTML + multipart/alternative fallback
-│   ├── utils/
-│   │   └── validateEmailPayload.js # Strict RFC regex validator
-│   ├── app.js                   # Unified Express application router
-│   └── server.js                # Lifecycle, graceful shutdown & pre-boot checks
-├── .env                         # Active configuration
+├── backend/                     # Node.js & Express REST API Subsystem
+│   ├── src/
+│   │   ├── config/              # MSSQL pooling, Mailer transporter, JWT, ImageKit
+│   │   ├── controllers/         # Auth & email route controllers
+│   │   ├── middleware/          # Async handler, rate limiter, request logger
+│   │   ├── models/              # Sequelize models (User, EmailLog, OtpLog)
+│   │   ├── routes/              # Express route groups (/api/auth, /api/email, /api/system)
+│   │   ├── services/            # Email service, retry mechanism, transient backoff
+│   │   ├── templates/           # Handlebars dynamic template suite & renderer
+│   │   │   ├── handlebars/      # signup, verifyEmail, otp, resetPassword, etc.
+│   │   │   │   ├── layouts/     # main.handlebars master corporate layout
+│   │   │   │   ├── partials/    # navBar & footer partials
+│   │   │   │   └── renderer.js  # AOT compilation engine with memory caching
+│   │   │   ├── authEmails.js    # Direct verification & reset templates
+│   │   │   └── invoiceEmail.js  # Transactional invoice generator
+│   │   ├── utils/               # DNS typo validator, response envelopes
+│   │   ├── app.js               # Express application router & static frontend mount
+│   │   └── server.js            # Server lifecycle, graceful shutdown & boot checks
+│   ├── .env.example             # Documented environment template
+│   └── package.json             # Backend dependencies & scripts
+├── frontend/                    # Transactional Email Studio Single-Page App
+│   ├── index.html               # Semantic HTML5 layout with device frames & logs modal
+│   ├── css/
+│   │   └── style.css            # Corporate design system (Navy #174251, Amber #f5a623)
+│   └── js/
+│       └── app.js               # Live preview debouncer, state manager & API client
+├── .env                         # Active local configuration (git-ignored)
 ├── .env.example                 # Documented template
-├── package.json
+├── package.json                 # Workspace runner scripts
 └── README.md
 ```
 
@@ -98,25 +94,24 @@ sequenceDiagram
     autonumber
     actor App as Express (Nodemailer)
     participant Server as Remote SMTP Server (Port 587)
-    
-    App->>Server: TCP Connection initiated on Port 587
+
+    App->>Server: Connect TCP Socket (Port 587)
     Server-->>App: 220 smtp.example.com ESMTP Postfix
-    App->>Server: EHLO client.hostname.local
-    Server-->>App: 250-SIZE 35882577 / 250-STARTTLS / 250-AUTH PLAIN LOGIN
+    App->>Server: EHLO client.local
+    Server-->>App: 250-STARTTLS, 250-AUTH PLAIN LOGIN
     App->>Server: STARTTLS
     Server-->>App: 220 2.0.0 Ready to start TLS
-    Note over App,Server: TLS Handshake occurs here (Channel encrypted)
-    App->>Server: EHLO client.hostname.local (Re-greet under TLS)
-    Server-->>App: 250-AUTH PLAIN LOGIN
-    App->>Server: AUTH LOGIN (Base64 User & Pass)
+    Note over App,Server: TLS Handshake completes (Encrypted Channel Active)
+    App->>Server: AUTH LOGIN (Base64 User & Password)
     Server-->>App: 235 2.7.0 Authentication successful
-    App->>Server: MAIL FROM:<sender@yourdomain.com>
-    Server-->>App: 250 2.1.0 Ok (Sender accepted)
-    App->>Server: RCPT TO:<recipient@example.com>
-    Server-->>App: 250 2.1.5 Ok (Recipient accepted)
+    App->>Server: MAIL FROM: <sender@example.com>
+    Server-->>App: 250 2.1.0 Ok
+    App->>Server: RCPT TO: <recipient@example.com>
+    Server-->>App: 250 2.1.5 Ok
     App->>Server: DATA
     Server-->>App: 354 End data with <CR><LF>.<CR><LF>
-    App->>Server: MIME headers, Subject, Body, Attachments + \r\n.\r\n
+    App->>Server: Headers (Subject, From, To) + MIME Body
+    App->>Server: .
     Server-->>App: 250 2.0.0 Ok: queued as 4X8mK9...
     App->>Server: QUIT
     Server-->>App: 221 2.0.0 Bye
@@ -127,7 +122,9 @@ sequenceDiagram
 ## 4. API Reference & Curl Examples
 
 ### Response Envelope
+
 Every endpoint returns a predictable, standardized JSON envelope:
+
 ```json
 {
   "success": true,
@@ -142,7 +139,9 @@ Every endpoint returns a predictable, standardized JSON envelope:
 ### A. System Telemetry & Dependency Probe (`/api/system`)
 
 #### 1. Real-time System & Dependency Health
+
 Probes live MSSQL query latency, SMTP transporter handshake, ImageKit readiness, Node process memory, and uptime.
+
 ```bash
 curl -X GET http://localhost:3000/api/system/health
 ```
@@ -152,7 +151,9 @@ curl -X GET http://localhost:3000/api/system/health
 ### B. Authentication & User Lifecycle (`/api/auth`)
 
 #### 1. Register User & Dispatch Verification Email
+
 Registers user, hashes password with bcryptjs, and sends an automated verification email via Nodemailer.
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
@@ -164,7 +165,9 @@ curl -X POST http://localhost:3000/api/auth/register \
 ```
 
 #### 2. Verify Email Address
+
 Click the link in the verification email, or send the token via API:
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/verify-email \
   -H "Content-Type: application/json" \
@@ -174,6 +177,7 @@ curl -X POST http://localhost:3000/api/auth/verify-email \
 ```
 
 #### 3. Log In (Issues JWT)
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -184,13 +188,16 @@ curl -X POST http://localhost:3000/api/auth/login \
 ```
 
 #### 4. Get Current User Profile (Protected)
+
 ```bash
 curl -X GET http://localhost:3000/api/auth/me \
   -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
 ```
 
 #### 5. Request Password Reset Link
+
 Generates reset token (1-hour expiry) and emails user via Nodemailer:
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/forgot-password \
   -H "Content-Type: application/json" \
@@ -200,6 +207,7 @@ curl -X POST http://localhost:3000/api/auth/forgot-password \
 ```
 
 #### 6. Reset Password
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/reset-password \
   -H "Content-Type: application/json" \
@@ -211,22 +219,25 @@ curl -X POST http://localhost:3000/api/auth/reset-password \
 
 ---
 
-### B. Email Sending & Audit Logs (`/api/email`)
+### C. Email Sending & Audit Logs (`/api/email`)
 
 *Note: You can optionally pass `Authorization: Bearer <token>` to any email endpoint; the email log in MSSQL will automatically associate with your user account.*
 
 #### 1. Transporter Health Check
+
 ```bash
 curl -X GET http://localhost:3000/api/email/health
 ```
 
 #### 2. Query Email Audit Logs (from MSSQL)
+
 ```bash
 curl -X GET "http://localhost:3000/api/email/logs?limit=10" \
   -H "Authorization: Bearer <OPTIONAL_TOKEN>"
 ```
 
 #### 3. Send Plain Text Email
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send \
   -H "Content-Type: application/json" \
@@ -238,6 +249,7 @@ curl -X POST http://localhost:3000/api/email/send \
 ```
 
 #### 4. Send Rich HTML Email (with Plaintext Fallback)
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-html \
   -H "Content-Type: application/json" \
@@ -249,6 +261,7 @@ curl -X POST http://localhost:3000/api/email/send-html \
 ```
 
 #### 5. Send Templated Welcome Email
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-template \
   -H "Content-Type: application/json" \
@@ -259,7 +272,9 @@ curl -X POST http://localhost:3000/api/email/send-template \
 ```
 
 #### 6. Send Dynamic Handlebars Template (with main.handlebars layout)
+
 Dispatches emails dynamically compiled using the file-based Handlebars engine:
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-handlebars \
   -H "Content-Type: application/json" \
@@ -273,10 +288,13 @@ curl -X POST http://localhost:3000/api/email/send-handlebars \
     }
   }'
 ```
-*Supported templates:* `signup`, `loginAlert`, `otp`, `resetPassword`.
+
+*Supported templates:* `signup`, `verifyEmail`, `loginAlert`, `otp`, `resetPassword`, `passwordChanged`, `invoice`.
 
 #### 7. Send Security Login Alert Notification
+
 Dispatches a device & IP security alert when an account sign-in occurs:
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-login-alert \
   -H "Content-Type: application/json" \
@@ -291,7 +309,9 @@ curl -X POST http://localhost:3000/api/email/send-login-alert \
 ```
 
 #### 8. Send Itemized Corporate Invoice / Billing Email
+
 Dispatches a modern, responsive transaction receipt matching the corporate brand design:
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-invoice \
   -H "Content-Type: application/json" \
@@ -308,8 +328,10 @@ curl -X POST http://localhost:3000/api/email/send-invoice \
   }'
 ```
 
-#### 7. In-Memory Template Preview & HTML Inspector (Zero SMTP Traffic)
+#### 9. In-Memory Template Preview & HTML Inspector (Zero SMTP Traffic)
+
 Inspect rendered responsive HTML and plain-text alternatives before sending:
+
 ```bash
 curl -X POST http://localhost:3000/api/email/preview \
   -H "Content-Type: application/json" \
@@ -321,22 +343,28 @@ curl -X POST http://localhost:3000/api/email/preview \
     }
   }'
 ```
-*Supported templates:* `welcome`, `invoice`, `otp`, `verification`, `reset-password`, `direct`.
 
-#### 8. Retry Failed Email Transmission
+*Supported templates:* `signup`, `verify-email`, `login-alert`, `otp-hbs`, `reset-password-hbs`, `password-changed`, `invoice-hbs`, `welcome`, `invoice`.
+
+#### 10. Retry Failed Email Transmission
+
 Resends any previously recorded email audit log by ID:
+
 ```bash
 curl -X POST http://localhost:3000/api/email/logs/12/retry \
   -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
 ```
 
-#### 9. Query & Filter Delivery Audit Logs
+#### 11. Query & Filter Delivery Audit Logs
+
 Filter by search terms, status, category, or date range:
+
 ```bash
 curl -X GET "http://localhost:3000/api/email/logs?page=1&limit=20&search=client@example.com&category=INVOICE&status=ACCEPTED"
 ```
 
-#### 10. Send Email with Attachment (Multipart)
+#### 12. Send Email with Attachment (Multipart)
+
 ```bash
 echo "Sample file content" > test.txt
 
@@ -346,7 +374,8 @@ curl -X POST http://localhost:3000/api/email/send-attachment \
   -F "file=@test.txt"
 ```
 
-#### 11. Concurrent Bulk Dispatch (with Deduplication & Throttling)
+#### 13. Concurrent Bulk Dispatch (with Deduplication & Throttling)
+
 ```bash
 curl -X POST http://localhost:3000/api/email/send-bulk \
   -H "Content-Type: application/json" \
@@ -359,14 +388,16 @@ curl -X POST http://localhost:3000/api/email/send-bulk \
 
 ---
 
-### C. Media Storage (`/api/media`)
+### D. Media Storage (`/api/media`)
 
 #### 1. ImageKit Health Status
+
 ```bash
 curl -X GET http://localhost:3000/api/media/health
 ```
 
 #### 2. Upload Media to ImageKit CDN
+
 ```bash
 curl -X POST http://localhost:3000/api/media/upload \
   -F "file=@sample.png" \

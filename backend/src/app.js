@@ -9,6 +9,29 @@ import { ApiResponse } from './utils/response.js';
 
 import cookieParser from 'cookie-parser';
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Dynamically locate frontend directory
+const candidateFrontendDirs = [
+  path.resolve(__dirname, '../../frontend'),
+  path.resolve(__dirname, '../frontend'),
+  path.resolve(__dirname, '../../public'),
+  path.resolve(__dirname, '../public'),
+];
+
+let publicDir = candidateFrontendDirs[0];
+for (const dir of candidateFrontendDirs) {
+  if (fs.existsSync(dir)) {
+    publicDir = dir;
+    break;
+  }
+}
+
 // Subsystem Routers
 import authRoutes from './routes/auth.routes.js';
 import emailRoutes from './routes/email.routes.js';
@@ -17,8 +40,12 @@ import systemRoutes from './routes/system.routes.js';
 
 const app = express();
 
-// 1. Security Headers (Helmet)
-app.use(helmet());
+// 1. Security Headers (Helmet configured to permit live sandboxed email iframes)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 // 2. Cross-Origin Resource Sharing (CORS with cookie credentials support)
 app.use(
@@ -38,16 +65,32 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser(env.JWT_SECRET));
 
-// 5. Global API Rate Limiter
+// 5. Serve Static Frontend Web App (Email Studio)
+app.use(express.static(publicDir, { index: false }));
+
+// Dedicated UI endpoints
+app.get(['/studio', '/dashboard'], (req, res) => {
+  return res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// 6. Global API Rate Limiter
 app.use('/api', apiLimiter);
 
-// 6. Root Discovery / API Sitemap
+// 7. Root Discovery / API Sitemap (Returns UI to Web Browsers or JSON to API clients)
 app.get('/', (req, res) => {
+  const wantsJson = req.query.format === 'json' ||
+    (req.headers.accept && req.headers.accept.includes('application/json') && !req.headers.accept.includes('text/html'));
+
+  if (!wantsJson && req.accepts('html')) {
+    return res.sendFile(path.join(publicDir, 'index.html'));
+  }
+
   return ApiResponse.success(
     res,
     {
       name: 'SMTP & Nodemailer Production Lab (with MSSQL, JWT Auth & ImageKit)',
       version: '1.0.0',
+      studio: '/studio',
       environment: env.NODE_ENV,
       endpoints: {
         system: {

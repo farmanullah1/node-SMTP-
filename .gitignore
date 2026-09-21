@@ -1,10 +1,14 @@
 # Dependency directories
 node_modules/
+**/node_modules/
 
 # Environment configuration (Contains sensitive SMTP credentials)
 .env
-.env.local
-.env.production
+.env.*
+**/.env
+**/.env.*
+backend/.env
+backend/.env.*
 
 # Temporary uploads / uploads directory if created
 uploads/

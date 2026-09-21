@@ -12,6 +12,12 @@ let layoutCompiled = null;
 let initialized = false;
 
 /**
+ * Non-breaking padding sequence to prevent email clients from pulling
+ * header/footer text into the inbox preview snippet when preheader is short.
+ */
+const PREHEADER_PADDING = '&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;&#847; &zwnj;&nbsp;&#8199;&shy;';
+
+/**
  * Registers custom Handlebars helpers for email formatting.
  */
 function registerHelpers() {
@@ -31,6 +37,12 @@ function registerHelpers() {
     } catch (_) {
       return dateStr || '';
     }
+  });
+
+  Handlebars.registerHelper('preheaderPadding', () => new Handlebars.SafeString(PREHEADER_PADDING));
+
+  Handlebars.registerHelper('fallback', (val, defaultVal) => {
+    return (val !== undefined && val !== null && val !== '') ? val : defaultVal;
   });
 }
 
@@ -52,7 +64,26 @@ function registerPartials() {
 }
 
 /**
- * Initializes the Handlebars engine (partials, helpers, and layout).
+ * Ahead-Of-Time (AOT) precompilation for all top-level templates in src/templates/handlebars/.
+ * Eliminates filesystem read latency on high-throughput email dispatches.
+ */
+function precompileTemplates() {
+  try {
+    const files = fs.readdirSync(__dirname);
+    for (const file of files) {
+      if ((file.endsWith('.handlebars') || file.endsWith('.hbs')) && file !== 'layouts') {
+        const templateName = path.basename(file, path.extname(file));
+        const content = fs.readFileSync(path.join(__dirname, file), 'utf8');
+        templateCache.set(templateName, Handlebars.compile(content));
+      }
+    }
+  } catch (err) {
+    console.warn('[HandlebarsEngine] Warning during template precompilation:', err.message);
+  }
+}
+
+/**
+ * Initializes the Handlebars engine (partials, helpers, layout, and precompiled views).
  */
 export function initHandlebarsEngine() {
   if (initialized && layoutCompiled) {
@@ -69,6 +100,8 @@ export function initHandlebarsEngine() {
   } else {
     throw new Error(`Master layout not found at: ${layoutPath}`);
   }
+
+  precompileTemplates();
 
   initialized = true;
 }
@@ -113,7 +146,23 @@ export function htmlToPlainText(html) {
 export function renderHandlebarsTemplate(templateName, context = {}, options = {}) {
   initHandlebarsEngine();
 
-  const cleanName = templateName.replace(/\.(handlebars|hbs)$/, '');
+  // Normalize alias names (e.g., 'verify-email' -> 'verifyEmail')
+  const aliasMap = {
+    'verify-email': 'verifyEmail',
+    'verifyemail': 'verifyEmail',
+    'login-alert': 'loginAlert',
+    'loginalert': 'loginAlert',
+    'reset-password': 'resetPassword',
+    'reset-password-hbs': 'resetPassword',
+    'resetpassword': 'resetPassword',
+    'password-changed': 'passwordChanged',
+    'passwordchanged': 'passwordChanged',
+    'otp-hbs': 'otp',
+    'invoice-hbs': 'invoice',
+  };
+
+  const rawClean = templateName.replace(/\.(handlebars|hbs)$/, '');
+  const cleanName = aliasMap[rawClean.toLowerCase()] || rawClean;
   const templatePath = path.join(__dirname, `${cleanName}.handlebars`);
 
   if (!fs.existsSync(templatePath)) {
@@ -128,8 +177,22 @@ export function renderHandlebarsTemplate(templateName, context = {}, options = {
     templateCache.set(cleanName, compiledView);
   }
 
-  // Pre-process context helpers
+  // Pre-process context helpers & corporate defaults
   const enrichedContext = { ...context };
+
+  // Corporate branding defaults
+  enrichedContext.companyName = enrichedContext.companyName || 'Farmanullah Ansari Company';
+  enrichedContext.companyAddress = enrichedContext.companyAddress || '123 Business Avenue, Suite 400, Karachi, Pakistan';
+  enrichedContext.companyPhone = enrichedContext.companyPhone || '+92-300-1234567';
+  enrichedContext.supportEmail = enrichedContext.supportEmail || 'contact@farmanullahansari.com';
+  enrichedContext.privacyUrl = enrichedContext.privacyUrl || 'https://farmanullahansari.com/privacy';
+  enrichedContext.termsUrl = enrichedContext.termsUrl || 'https://farmanullahansari.com/terms';
+
+  // Determine transactional nature
+  const transactionalTemplates = ['otp', 'resetPassword', 'verifyEmail', 'loginAlert', 'passwordChanged'];
+  if (enrichedContext.isTransactional === undefined) {
+    enrichedContext.isTransactional = transactionalTemplates.includes(cleanName);
+  }
 
   // If OTP is provided as string, split into individual digit boxes for styling
   if (enrichedContext.otp && !enrichedContext.otpDigits) {
@@ -160,6 +223,9 @@ export function renderHandlebarsTemplate(templateName, context = {}, options = {
       case 'signup':
         subject = `Welcome to the Family, ${enrichedContext.name || 'Valued Member'}!`;
         break;
+      case 'verifyEmail':
+        subject = 'Verify Your Email Address - Farmanullah Ansari Company';
+        break;
       case 'loginAlert':
         subject = `Security Alert: New sign-in detected for ${enrichedContext.name || 'your account'}`;
         break;
@@ -168,6 +234,12 @@ export function renderHandlebarsTemplate(templateName, context = {}, options = {
         break;
       case 'resetPassword':
         subject = 'Reset Your Password - Farmanullah Ansari Company';
+        break;
+      case 'passwordChanged':
+        subject = 'Security Notice: Your Password Has Been Updated';
+        break;
+      case 'invoice':
+        subject = `Invoice ${enrichedContext.invoiceNumber || ''} from Farmanullah Ansari Company - ${enrichedContext.isPaid ? 'PAID' : 'DUE'}`;
         break;
       default:
         subject = 'Farmanullah Ansari Company Official Communication';

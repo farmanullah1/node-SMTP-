@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Farmanullah Ansari Company - Transactional Email Studio & Dynamic Handlebars Dispatcher">
+  <title>Email Studio & Handlebars Dispatcher | Farmanullah Ansari Company</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Top Application Bar -->
+  <header class="app-header">
+    <div class="brand-container">
+      <div class="brand-logo" aria-hidden="true">FA</div>
+      <div class="brand-text">
+        <h1>Farmanullah Ansari Company</h1>
+        <span>Transactional Email Studio</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- SMTP Live Health Telemetry Badge -->
+      <div class="smtp-status-badge" id="smtpStatusBadge" title="SMTP Diagnostics Handshake">
+        <span class="status-indicator online" id="smtpStatusDot"></span>
+        <span id="smtpStatusText">Checking SMTP...</span>
+      </div>
+
+      <!-- Audit Logs Trigger -->
+      <button class="btn btn-secondary btn-sm" id="openLogsBtn" type="button">
+        📋 Delivery Logs
+      </button>
+
+      <!-- Send Live Email Trigger -->
+      <button class="btn btn-primary btn-sm" id="openSendModalBtn" type="button">
+        🚀 Send Live Email
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace Main Layout -->
+  <main class="app-main">
+    
+    <!-- Left Configuration Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="section-label">Select Handlebars Template</div>
+        <div class="template-pills" id="templatePillsContainer" role="tablist">
+          <button class="template-pill active" data-template="signup" id="pill-signup" type="button" role="tab">🚀 Welcome / Sign-up</button>
+          <button class="template-pill" data-template="verifyEmail" id="pill-verifyEmail" type="button" role="tab">✉️ Verify Email</button>
+          <button class="template-pill" data-template="otp" id="pill-otp" type="button" role="tab">🔒 2FA Passcode</button>
+          <button class="template-pill" data-template="resetPassword" id="pill-resetPassword" type="button" role="tab">🔑 Reset Password</button>
+          <button class="template-pill" data-template="passwordChanged" id="pill-passwordChanged" type="button" role="tab">✅ Password Changed</button>
+          <button class="template-pill" data-template="loginAlert" id="pill-loginAlert" type="button" role="tab">🛡️ Login Alert</button>
+          <button class="template-pill" data-template="invoice" id="pill-invoice" type="button" role="tab">🧾 Invoice Billing</button>
+        </div>
+      </div>
+
+      <!-- Dynamic Template Fields -->
+      <div class="sidebar-body" id="dynamicFormContainer">
+        <!-- Injected dynamically based on template -->
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-primary" id="refreshPreviewBtn" style="flex: 1;" type="button">
+          🔄 Refresh Preview
+        </button>
+        <button class="btn btn-secondary" id="resetDataBtn" type="button" title="Reset sample variables">
+          ↺ Reset
+        </button>
+      </div>
+    </aside>
+
+    <!-- Center Preview Area -->
+    <section class="preview-area">
+      <!-- Toolbar -->
+      <div class="preview-toolbar">
+        <div class="toolbar-group">
+          <div class="view-tabs" role="tablist">
+            <button class="view-tab active" id="tab-rendered" data-view="rendered" type="button">Rendered HTML</button>
+            <button class="view-tab" id="tab-plaintext" data-view="plaintext" type="button">Plain Text Fallback</button>
+            <button class="view-tab" id="tab-source" data-view="source" type="button">HTML Source</button>
+          </div>
+        </div>
+
+        <div class="toolbar-group">
+          <!-- Viewport Toggle -->
+          <div class="device-toggle" id="deviceToggle">
+            <button class="device-btn active" data-device="desktop" title="Desktop Viewport (650px)" type="button">🖥️ Desktop</button>
+            <button class="device-btn" data-device="mobile" title="Mobile Smartphone Viewport (375px)" type="button">📱 Mobile</button>
+            <button class="device-btn" data-device="full" title="Full Width" type="button">⛶ Full</button>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" id="copyCodeBtn" type="button" title="Copy Current Content">
+            📋 Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Dynamic Subject Display Bar -->
+      <div class="subject-preview-bar">
+        <span class="badge">Subject</span>
+        <span class="subject-text" id="subjectPreviewText">Loading template...</span>
+      </div>
+
+      <!-- Canvas Stage -->
+      <div class="canvas-stage" id="canvasStage">
+        
+        <!-- Rendered Iframe Mode -->
+        <div class="email-frame-wrapper desktop" id="emailFrameWrapper">
+          <iframe id="previewIframe" class="email-iframe" sandbox="allow-same-origin allow-popups" title="Email Live Preview"></iframe>
+        </div>
+
+        <!-- Plain Text Inspector Pane (Hidden by default) -->
+        <pre class="code-inspector-pane" id="plainTextPane" style="display: none;"></pre>
+
+        <!-- HTML Source Inspector Pane (Hidden by default) -->
+        <pre class="code-inspector-pane" id="htmlSourcePane" style="display: none;"></pre>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: Send Live Email -->
+  <div class="modal-backdrop" id="sendEmailModal" role="dialog" aria-modal="true" aria-labelledby="sendModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="sendModalTitle">Dispatch Handlebars Email</div>
+        <button class="modal-close" id="closeSendModalBtn" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modalRecipientInput">Recipient Email Address <span style="color: var(--color-danger);">*</span></label>
+          <input type="email" id="modalRecipientInput" class="form-control" placeholder="user@example.com" required>
+          <div class="form-hint" id="domainTypoWarning" style="display: none; color: var(--color-warning);"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="modalSubjectInput">Subject Override (Optional)</label>
+          <input type="text" id="modalSubjectInput" class="form-control" placeholder="Default template subject will be used if left blank">
+        </div>
+
+        <div class="form-group">
+          <label for="modalActiveTemplate">Active Template</label>
+          <input type="text" id="modalActiveTemplate" class="form-control form-control-mono" readonly>
+        </div>
+
+        <div id="sendProgressAlert" style="display: none; padding: 12px; border-radius: var(--radius-sm); margin-top: 10px; font-size: 13px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelSendBtn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="confirmSendBtn" type="button">
+          🚀 Send Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Delivery Audit Logs -->
+  <div class="modal-backdrop" id="logsModal" role="dialog" aria-modal="true" aria-labelledby="logsModalTitle">
+    <div class="modal-card" style="max-width: 850px;">
+      <div class="modal-header">
+        <div class="modal-title" id="logsModalTitle">MSSQL Outbound Delivery Logs</div>
+        <button class="modal-close" id="closeLogsModalBtn" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <input type="text" id="logSearchInput" class="form-control" style="max-width: 300px;" placeholder="Search recipient or subject...">
+          <button class="btn btn-secondary btn-sm" id="refreshLogsBtn" type="button">🔄 Refresh</button>
+        </div>
+        <div id="logsTableContainer" style="overflow-x: auto;">
+          <p style="color: var(--color-text-dim); text-align: center; padding: 20px;">Loading audit records from database...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="closeLogsFooterBtn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -504,6 +504,46 @@ export async function previewTemplate(req, res) {
         ...data,
       });
       break;
+    case 'verify-email-hbs':
+    case 'verify-email':
+    case 'verifyemail':
+      rendered = renderHandlebarsTemplate('verifyEmail', {
+        name: data.name || 'Farmanullah',
+        verificationUrl: data.verificationUrl || 'http://localhost:3000/api/auth/verify-email?token=example_token_123',
+        token: data.token || 'example_token_123',
+        ...data,
+      });
+      break;
+    case 'password-changed':
+    case 'passwordchanged':
+      rendered = renderHandlebarsTemplate('passwordChanged', {
+        name: data.name || 'Farmanullah',
+        timestamp: data.timestamp || new Date().toUTCString(),
+        ipAddress: data.ipAddress || '192.168.1.10',
+        device: data.device || 'Chrome 128 on Windows 11',
+        securityUrl: data.securityUrl || 'http://localhost:3000/api/auth/forgot-password',
+        ...data,
+      });
+      break;
+    case 'invoice-hbs':
+      rendered = renderHandlebarsTemplate('invoice', {
+        clientName: data.clientName || 'Farmanullah Ansari',
+        invoiceNumber: data.invoiceNumber || 'INV-2026-0042',
+        issueDate: data.issueDate || new Date().toISOString(),
+        dueDate: data.dueDate || new Date(Date.now() + 14 * 86400000).toISOString(),
+        isPaid: data.isPaid !== undefined ? data.isPaid : true,
+        items: data.items || [
+          { description: 'Cloud Transactional SMTP Cluster Setup', quantity: 1, amount: 250 },
+          { description: 'DKIM & SPF Authentication Provisioning', quantity: 1, amount: 150 },
+          { description: 'Handlebars Dynamic Templates Customization', quantity: 1, amount: 100 },
+        ],
+        subtotal: data.subtotal || 500,
+        tax: data.tax || 25,
+        total: data.total || 525,
+        paymentUrl: data.paymentUrl || 'http://localhost:3000/billing/pay/INV-2026-0042',
+        ...data,
+      });
+      break;
     case 'welcome':
       rendered = renderWelcomeEmail(data);
       break;
@@ -543,7 +583,7 @@ export async function previewTemplate(req, res) {
       break;
     default:
       throw ApiError.badRequest(
-        `Unknown template '${template}'. Available: 'signup', 'login-alert', 'otp-hbs', 'reset-password-hbs', 'welcome', 'verification', 'reset-password', 'otp', 'invoice', 'direct'.`,
+        `Unknown template '${template}'. Available: 'signup', 'verify-email', 'login-alert', 'otp-hbs', 'reset-password-hbs', 'password-changed', 'invoice-hbs', 'welcome', 'verification', 'reset-password', 'otp', 'invoice', 'direct'.`,
         'INVALID_TEMPLATE_NAME'
       );
   }
