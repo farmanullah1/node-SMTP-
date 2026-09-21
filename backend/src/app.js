@@ -16,12 +16,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Dynamically locate frontend directory
+// Dynamically locate frontend directory (prefers built React dist if available)
 const candidateFrontendDirs = [
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../frontend/dist'),
   path.resolve(__dirname, '../../frontend'),
   path.resolve(__dirname, '../frontend'),
-  path.resolve(__dirname, '../../public'),
-  path.resolve(__dirname, '../public'),
 ];
 
 let publicDir = candidateFrontendDirs[0];
@@ -50,7 +50,18 @@ app.use(
 // 2. Cross-Origin Resource Sharing (CORS with cookie credentials support)
 app.use(
   cors({
-    origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like curl or same-origin)
+      if (!origin) return callback(null, true);
+      // Explicitly allow localhost:5173 (Vite frontend) and any localhost/127.0.0.1 port
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+      if (env.CORS_ORIGIN === '*' || env.CORS_ORIGIN === origin) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

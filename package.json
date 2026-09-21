@@ -10,7 +10,8 @@
     "backend:start": "npm --prefix backend start",
     "backend:dev": "npm --prefix backend run dev",
     "frontend:dev": "npm --prefix frontend run dev",
-    "frontend:start": "npm --prefix frontend start"
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:preview": "npm --prefix frontend run preview"
   },
   "keywords": [
     "nodemailer",

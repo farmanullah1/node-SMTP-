@@ -73,14 +73,18 @@ smtp-nodemailer-lab/
 │   │   └── server.js            # Server lifecycle, graceful shutdown & boot checks
 │   ├── .env.example             # Documented environment template
 │   └── package.json             # Backend dependencies & scripts
-├── frontend/                    # Transactional Email Studio Single-Page App
-│   ├── dev-server.js            # Zero-dependency local dev server with /api reverse proxy
-│   ├── package.json             # Frontend standalone package scripts
-│   ├── index.html               # Semantic HTML5 layout with device frames & logs modal
-│   ├── css/
-│   │   └── style.css            # Corporate design system (Navy #174251, Amber #f5a623)
-│   └── js/
-│       └── app.js               # Live preview debouncer, state manager & API client
+├── frontend/                    # Transactional Email Studio (React + Vite App)
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Auth/            # AuthModal (Signup, Login, Password Reset)
+│   │   │   └── Studio/          # EmailStudio, PreviewCanvas, SendModal, AuditLogsModal
+│   │   ├── context/             # AuthContext (JWT session & Nodemailer hooks)
+│   │   ├── App.jsx              # Workspace shell & gatekeeper router
+│   │   ├── main.jsx             # React DOM entry point
+│   │   └── index.css            # Corporate design system & animations
+│   ├── index.html               # Vite HTML template
+│   ├── vite.config.js           # Port 5173 & /api proxy to port 3000
+│   └── package.json             # React, Vite dependencies & scripts
 ├── .env                         # Active local configuration (git-ignored)
 ├── .env.example                 # Documented template
 ├── package.json                 # Workspace runner scripts

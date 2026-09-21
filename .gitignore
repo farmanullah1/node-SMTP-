@@ -1,6 +1,8 @@
-# Dependency directories
+# Dependency & Build directories
 node_modules/
 **/node_modules/
+dist/
+**/dist/
 
 # Environment configuration (Contains sensitive SMTP credentials)
 .env

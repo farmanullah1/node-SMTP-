@@ -1,19 +1,19 @@
 {
   "name": "smtp-nodemailer-frontend",
   "version": "1.0.0",
-  "description": "Transactional Email Studio & Handlebars Preview Interface",
+  "description": "Transactional Email Studio & Handlebars React Application",
   "type": "module",
-  "main": "dev-server.js",
   "scripts": {
-    "dev": "node dev-server.js",
-    "start": "node dev-server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": [
-    "email-studio",
-    "handlebars",
-    "preview",
-    "frontend"
-  ],
-  "author": "Farmanullah Ansari Company",
-  "license": "ISC"
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2"
+  }
 }
