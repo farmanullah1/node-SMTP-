@@ -11,6 +11,7 @@ import { renderInvoiceEmail } from '../templates/invoiceEmail.js';
 import { renderHandlebarsTemplate } from '../templates/handlebars/renderer.js';
 import { EmailLog } from '../models/EmailLog.js';
 import { OtpLog } from '../models/OtpLog.js';
+import { User } from '../models/User.js';
 import { ApiResponse, ApiError } from '../utils/response.js';
 
 /**
@@ -212,6 +213,46 @@ export async function sendHandlebars(req, res) {
   const { template, to, data = {}, subject, replyTo } = req.body;
   if (!template || typeof template !== 'string') {
     throw ApiError.badRequest("A 'template' name is required (e.g. 'signup', 'loginAlert', 'otp', 'resetPassword').", 'MISSING_TEMPLATE');
+  }
+
+  // If dispatching a verification/signup template, generate a real database-backed token so the email link actually works
+  const templateKey = template.toLowerCase();
+  if (['signup', 'verifyemail', 'verify-email'].includes(templateKey) && to) {
+    const isDummyToken = !data.verificationUrl || 
+      data.verificationUrl.includes('preview_123') || 
+      data.verificationUrl.includes('welcome_tok_123') ||
+      data.verificationUrl.includes('verif_8892');
+
+    if (isDummyToken) {
+      try {
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        let user = await User.findOne({ where: { email: to.toLowerCase().trim() } });
+        if (user) {
+          user.verificationToken = hashedToken;
+          user.verificationTokenExpires = tokenExpires;
+          await user.save();
+        } else {
+          user = await User.create({
+            name: data.name || to.split('@')[0],
+            email: to.toLowerCase().trim(),
+            password: crypto.randomBytes(16).toString('hex'),
+            role: 'user',
+            isVerified: false,
+            verificationToken: hashedToken,
+            verificationTokenExpires: tokenExpires,
+          });
+        }
+
+        const clientBaseUrl = process.env.CLIENT_URL || `http://localhost:${process.env.PORT || 3000}`;
+        data.verificationUrl = `${clientBaseUrl}/api/auth/verify-email?token=${rawToken}`;
+        data.token = rawToken;
+      } catch (tokenErr) {
+        console.warn('[Handlebars Dispatch] Could not auto-provision verification token:', tokenErr.message);
+      }
+    }
   }
 
   const result = await emailService.sendHandlebarsEmail({

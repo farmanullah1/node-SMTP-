@@ -10,6 +10,8 @@ export default function App() {
   
   // Navigation / Modal States
   const [guestMode, setGuestMode] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState('signup');
+  const [templateVariables, setTemplateVariables] = useState({});
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState({ state: 'checking', text: 'Connecting...' });
@@ -149,6 +151,9 @@ export default function App() {
         <AuthModal onBypassGuest={() => setGuestMode(true)} />
       ) : (
         <EmailStudio
+          activeTemplate={activeTemplate}
+          onTemplateChange={setActiveTemplate}
+          onVariablesChange={setTemplateVariables}
           onOpenSend={() => setIsSendModalOpen(true)}
           onOpenLogs={() => setIsLogsModalOpen(true)}
         />
@@ -158,13 +163,8 @@ export default function App() {
       <SendModal
         isOpen={isSendModalOpen}
         onClose={() => setIsSendModalOpen(false)}
-        activeTemplate="signup"
-        templateVariables={{
-          name: user?.name || 'Farmanullah Ansari',
-          verificationUrl: 'http://localhost:3000/api/auth/verify-email?token=preview_123',
-          actionUrl: 'http://localhost:3000/dashboard',
-          ctaText: 'Get Started Now →',
-        }}
+        activeTemplate={activeTemplate}
+        templateVariables={templateVariables}
       />
 
       <AuditLogsModal

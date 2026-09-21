@@ -105,11 +105,131 @@ export async function register(req, res) {
 /**
  * GET or POST /api/auth/verify-email
  * Verifies email address via token (passed in query string or request body).
+ * Returns corporate branded HTML for browser navigation or JSON for API calls.
  */
 export async function verifyEmail(req, res) {
   const rawToken = req.query.token || req.body.token;
+  const isHtmlRequest = req.accepts('html') && !req.xhr && !req.headers.accept?.includes('application/json');
+  const clientAppUrl = process.env.CLIENT_APP_URL || 'http://localhost:5173';
+
+  // Helper to render HTML verification pages
+  const renderVerificationHtml = ({ success, title, message, userEmail, actionText = 'Sign In to Studio', actionUrl = clientAppUrl }) => {
+    const brandColor = '#174251';
+    const accentColor = '#f5a623';
+    const statusColor = success ? '#10b981' : '#ef4444';
+    const statusBg = success ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+    const icon = success ? '✅' : '⚠️';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - Farmanullah Ansari Company</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0c1821;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #13222e;
+      border: 1px solid #223749;
+      border-radius: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      max-width: 480px;
+      width: 100%;
+      padding: 36px 30px;
+      text-align: center;
+    }
+    .brand-logo {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #f5a623 0%, #d97706 100%);
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 900;
+      color: #102a43;
+      margin-bottom: 16px;
+    }
+    .company-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: ${statusBg};
+      color: ${statusColor};
+      border: 1px solid ${statusColor};
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; color: #f8fafc; }
+    p { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; }
+    .email-highlight { color: #f5a623; font-weight: 600; }
+    .btn {
+      display: inline-block;
+      width: 100%;
+      padding: 12px 20px;
+      background: #f5a623;
+      color: #0c1821;
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #e08e0b; }
+    .footer-note {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand-logo">FA</div>
+    <div class="company-title">Farmanullah Ansari Company</div>
+    <div class="status-badge">${icon} ${success ? 'Email Verified' : 'Action Required'}</div>
+    <h2>${title}</h2>
+    <p>${message} ${userEmail ? `<br><span class="email-highlight">${userEmail}</span>` : ''}</p>
+    <a href="${actionUrl}" class="btn">${actionText} &rarr;</a>
+    <div class="footer-note">Farmanullah Ansari Company &bull; SMTP & Nodemailer Production Lab</div>
+  </div>
+</body>
+</html>`;
+  };
 
   if (!rawToken) {
+    if (isHtmlRequest) {
+      return res.status(400).send(renderVerificationHtml({
+        success: false,
+        title: 'Verification Token Missing',
+        message: 'No verification token was provided in the request link. Please check the email link or request a new verification email.',
+      }));
+    }
     throw ApiError.badRequest("Verification token is required (provide '?token=...' query or JSON body).", 'TOKEN_REQUIRED');
   }
 
@@ -120,10 +240,26 @@ export async function verifyEmail(req, res) {
   });
 
   if (!user) {
+    if (isHtmlRequest) {
+      return res.status(400).send(renderVerificationHtml({
+        success: false,
+        title: 'Invalid or Preview Token',
+        message: 'This verification token was not found in the database. If this was a test email from the Email Studio preview, please use the live registration flow or request a new verification link.',
+      }));
+    }
     throw ApiError.badRequest('Invalid verification token.', 'INVALID_TOKEN');
   }
 
   if (user.verificationTokenExpires && user.verificationTokenExpires < new Date()) {
+    if (isHtmlRequest) {
+      return res.status(400).send(renderVerificationHtml({
+        success: false,
+        title: 'Verification Link Expired',
+        message: 'Your verification token has expired after 24 hours. Please log in or request a new verification email.',
+        userEmail: user.email,
+        actionText: 'Request New Link / Sign In',
+      }));
+    }
     throw ApiError.badRequest('Verification token has expired. Please request a new verification email.', 'TOKEN_EXPIRED');
   }
 
@@ -132,6 +268,17 @@ export async function verifyEmail(req, res) {
   user.verificationToken = null;
   user.verificationTokenExpires = null;
   await user.save();
+
+  if (isHtmlRequest) {
+    return res.status(200).send(renderVerificationHtml({
+      success: true,
+      title: 'Email Verified Successfully!',
+      message: `Welcome to Farmanullah Ansari Company! Your email has been verified and your account is now fully active.`,
+      userEmail: user.email,
+      actionText: 'Sign In to Email Studio',
+      actionUrl: clientAppUrl,
+    }));
+  }
 
   return ApiResponse.success(
     res,

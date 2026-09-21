@@ -81,23 +81,36 @@ const TEMPLATE_PRESETS = {
   },
 };
 
-export default function EmailStudio({ onOpenSend, onOpenLogs }) {
-  const [activeTemplate, setActiveTemplate] = useState('signup');
+export default function EmailStudio({
+  activeTemplate = 'signup',
+  onTemplateChange,
+  onVariablesChange,
+  onOpenSend,
+  onOpenLogs,
+}) {
+  const [currentTemplate, setCurrentTemplate] = useState(activeTemplate);
   const [formData, setFormData] = useState({});
   const [activeView, setActiveView] = useState('rendered');
   const [activeDevice, setActiveDevice] = useState('desktop');
   const [previewData, setPreviewData] = useState(null);
   const [isRendering, setIsRendering] = useState(false);
 
+  // Sync external template changes if any
+  useEffect(() => {
+    if (activeTemplate && activeTemplate !== currentTemplate) {
+      setCurrentTemplate(activeTemplate);
+    }
+  }, [activeTemplate]);
+
   // Initialize form data when template changes
   useEffect(() => {
-    const config = TEMPLATE_PRESETS[activeTemplate];
+    const config = TEMPLATE_PRESETS[currentTemplate];
     if (config) {
       const initial = {};
       config.fields.forEach((f) => {
         initial[f.id] = f.default;
       });
-      if (activeTemplate === 'invoice') {
+      if (currentTemplate === 'invoice') {
         initial.items = [
           { description: 'Cloud Transactional SMTP Cluster Setup', quantity: 1, amount: 250 },
           { description: 'DKIM & SPF Authentication Provisioning', quantity: 1, amount: 150 },
@@ -105,8 +118,9 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
         ];
       }
       setFormData(initial);
+      if (onVariablesChange) onVariablesChange(initial);
     }
-  }, [activeTemplate]);
+  }, [currentTemplate]);
 
   // Request preview from backend
   const fetchPreview = useCallback(async (templateKey, data) => {
@@ -135,10 +149,16 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
   // Debounced preview update on form data changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchPreview(activeTemplate, formData);
+      fetchPreview(currentTemplate, formData);
+      if (onVariablesChange) onVariablesChange(formData);
     }, 180);
     return () => clearTimeout(timer);
-  }, [activeTemplate, formData, fetchPreview]);
+  }, [currentTemplate, formData, fetchPreview]);
+
+  function handleTemplateSelect(key) {
+    setCurrentTemplate(key);
+    if (onTemplateChange) onTemplateChange(key);
+  }
 
   function handleFieldChange(fieldId, value) {
     setFormData((prev) => ({
@@ -148,13 +168,13 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
   }
 
   function handleReset() {
-    const config = TEMPLATE_PRESETS[activeTemplate];
+    const config = TEMPLATE_PRESETS[currentTemplate];
     if (config) {
       const initial = {};
       config.fields.forEach((f) => {
         initial[f.id] = f.default;
       });
-      if (activeTemplate === 'invoice') {
+      if (currentTemplate === 'invoice') {
         initial.items = [
           { description: 'Cloud Transactional SMTP Cluster Setup', quantity: 1, amount: 250 },
           { description: 'DKIM & SPF Authentication Provisioning', quantity: 1, amount: 150 },
@@ -162,10 +182,11 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
         ];
       }
       setFormData(initial);
+      if (onVariablesChange) onVariablesChange(initial);
     }
   }
 
-  const currentConfig = TEMPLATE_PRESETS[activeTemplate];
+  const currentConfig = TEMPLATE_PRESETS[currentTemplate];
 
   return (
     <main class="app-main">
@@ -178,8 +199,8 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
               <button
                 key={key}
                 type="button"
-                class={`template-pill ${activeTemplate === key ? 'active' : ''}`}
-                onClick={() => setActiveTemplate(key)}
+                class={`template-pill ${currentTemplate === key ? 'active' : ''}`}
+                onClick={() => handleTemplateSelect(key)}
               >
                 {item.title}
               </button>
@@ -225,7 +246,7 @@ export default function EmailStudio({ onOpenSend, onOpenLogs }) {
             type="button"
             class="btn btn-primary"
             style={{ flex: 1 }}
-            onClick={() => fetchPreview(activeTemplate, formData)}
+            onClick={() => fetchPreview(currentTemplate, formData)}
             disabled={isRendering}
           >
             {isRendering ? 'Rendering...' : '🔄 Refresh Preview'}
