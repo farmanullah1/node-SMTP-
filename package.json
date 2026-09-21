@@ -8,7 +8,9 @@
     "start": "node backend/src/server.js",
     "dev": "nodemon backend/src/server.js",
     "backend:start": "npm --prefix backend start",
-    "backend:dev": "npm --prefix backend run dev"
+    "backend:dev": "npm --prefix backend run dev",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:start": "npm --prefix frontend start"
   },
   "keywords": [
     "nodemailer",

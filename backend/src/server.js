@@ -48,6 +48,20 @@ async function startServer() {
       console.log(`[HTTP] Email Health:     http://localhost:${env.PORT}/api/email/health`);
       console.log('====================================================\n');
     });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error('\n====================================================');
+        console.error(`[HTTP Warning] Port ${env.PORT} is already in use.`);
+        console.error(`Another instance of the server is already active on port ${env.PORT}.`);
+        console.error('If you wish to run another instance, specify a different port in .env (e.g. PORT=3001).');
+        console.error('====================================================\n');
+        process.exit(0);
+      } else {
+        console.error('\n[HTTP Fatal] Server error:', err);
+        process.exit(1);
+      }
+    });
   } catch (error) {
     console.error('\n[Startup Fatal] Failed during startup initialization:');
     console.error(error.message);

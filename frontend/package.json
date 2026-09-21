@@ -1,0 +1,19 @@
+{
+  "name": "smtp-nodemailer-frontend",
+  "version": "1.0.0",
+  "description": "Transactional Email Studio & Handlebars Preview Interface",
+  "type": "module",
+  "main": "dev-server.js",
+  "scripts": {
+    "dev": "node dev-server.js",
+    "start": "node dev-server.js"
+  },
+  "keywords": [
+    "email-studio",
+    "handlebars",
+    "preview",
+    "frontend"
+  ],
+  "author": "Farmanullah Ansari Company",
+  "license": "ISC"
+}

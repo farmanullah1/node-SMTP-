@@ -35,14 +35,16 @@ cp .env.example .env
 > If you leave `SMTP_HOST` and `SMTP_USER` empty in `.env`, the lab automatically generates an ephemeral **Ethereal test inbox** on startup. Every email sent (welcome, password reset, or test emails) returns a clickable `previewUrl` directly in the JSON response!
 > On startup, the server also checks for the database defined in `DATABASE=...` in your local SQL Server instance. If not found, it automatically creates it and synchronizes all tables (`Users`, `EmailLogs`).
 
-### Run the Server
+### Run the Server & Studio
 
 ```bash
-# Development mode with hot-reloading:
+# 1. Start Backend & Unified Email Studio (Express serves API + UI on port 3000):
 npm run dev
+# Or from backend folder: cd backend && npm run dev
 
-# Standard mode:
-npm start
+# 2. Start Dedicated Frontend Dev Server (port 5173 with transparent /api proxy to 3000):
+npm run frontend:dev
+# Or from frontend folder: cd frontend && npm run dev
 ```
 
 ---
@@ -72,6 +74,8 @@ smtp-nodemailer-lab/
 │   ├── .env.example             # Documented environment template
 │   └── package.json             # Backend dependencies & scripts
 ├── frontend/                    # Transactional Email Studio Single-Page App
+│   ├── dev-server.js            # Zero-dependency local dev server with /api reverse proxy
+│   ├── package.json             # Frontend standalone package scripts
 │   ├── index.html               # Semantic HTML5 layout with device frames & logs modal
 │   ├── css/
 │   │   └── style.css            # Corporate design system (Navy #174251, Amber #f5a623)
