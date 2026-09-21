@@ -1,8 +1,14 @@
 import crypto from 'crypto';
+import { fn, col } from 'sequelize';
 import { verifyTransporter, getMailerConfigSummary } from '../config/mailer.js';
 import { validateEmailPayload } from '../utils/validateEmailPayload.js';
 import emailService from '../services/emailService.js';
 import { renderPracticeEmailHtml } from '../templates/richDirectEmail.js';
+import { renderWelcomeEmail } from '../templates/welcomeEmail.js';
+import { renderVerificationEmail, renderPasswordResetEmail } from '../templates/authEmails.js';
+import { renderOtpEmail } from '../templates/otpEmail.js';
+import { renderInvoiceEmail } from '../templates/invoiceEmail.js';
+import { renderHandlebarsTemplate } from '../templates/handlebars/renderer.js';
 import { EmailLog } from '../models/EmailLog.js';
 import { OtpLog } from '../models/OtpLog.js';
 import { ApiResponse, ApiError } from '../utils/response.js';
@@ -24,49 +30,27 @@ import { ApiResponse, ApiError } from '../utils/response.js';
  *      for routing it. If the destination mailbox is full or the downstream MTA discards it,
  *      a bounce message (DSN - Delivery Status Notification) may return later asynchronously.
  * 
- * 2. WHY sendMail() RETURNS DIFFERENT FIELDS DEPENDING ON THE PROVIDER:
- *    - Nodemailer normalizes `messageId`, `accepted`, and `rejected`.
- *    - However, the `response` string is the raw SMTP dialogue line returned by the server:
- *      * SendGrid might return: `250 Ok: queued as abcdef123`
- *      * Postmark might return: `250 2.0.0 OK 16843000-xxxx`
- *      * Gmail might return: `250 2.0.0 OK <message-id> - gsmtp`
- *      * AWS SES might inject custom headers such as `x-ses-message-id`.
- * 
- * 3. HOW TO AVOID LANDING IN SPAM (DELIVERABILITY CHECKLIST):
- *    - SPF (Sender Policy Framework):
- *      DNS TXT record specifying which IP addresses are authorized to send mail
- *      for your domain (`v=spf1 include:_spf.google.com ~all`).
- *    - DKIM (DomainKeys Identified Mail):
- *      Asymmetric cryptographic signing. The private key signs headers and body;
- *      the public key is stored in DNS TXT record (`selector._domainkey.domain.com`).
- *      Proves the email was not tampered with in transit.
- *    - DMARC (Domain-based Message Authentication, Reporting, and Conformance):
- *      Aligns SPF and DKIM and tells receiving mail servers how to treat failures
- *      (`p=none`, `p=quarantine`, or `p=reject`).
- *    - ALWAYS SEND A PLAIN-TEXT ALTERNATIVE:
- *      Every HTML email should include a `text` alternative (multipart/alternative).
- *      Failing to do so triggers high spam score flags in SpamAssassin and Google algorithms.
- *    - SET `replyTo`:
- *      Always provide a valid, monitored mailbox in `replyTo`. Many automated spam filters
- *      penalize `no-reply` senders if no valid route for correspondence exists.
+ * 2. HOW TO AVOID LANDING IN SPAM (DELIVERABILITY CHECKLIST):
+ *    - SPF (Sender Policy Framework): Authorizes IPs via DNS TXT.
+ *    - DKIM (DomainKeys Identified Mail): Asymmetric crypto signing of headers & body.
+ *    - DMARC: Enforces SPF & DKIM alignment.
+ *    - ALWAYS SEND A PLAIN-TEXT ALTERNATIVE (multipart/alternative).
+ *    - SET A VALID `replyTo` ADDRESS.
  * ============================================================================
  */
 
 /**
- * Standardizes the controller response format:
- * { success, message, data: { messageId, accepted, rejected, response, previewUrl } }
+ * Helper to build standardized email delivery payload
  */
-function formatEmailResponse(info, customMessage = 'Email processed successfully') {
+function buildDeliveryData(info) {
   return {
-    success: true,
-    message: customMessage,
-    data: {
-      messageId: info.messageId || null,
-      accepted: info.accepted || [],
-      rejected: info.rejected || [],
-      response: info.response || null,
-      previewUrl: info.previewUrl || null,
-    },
+    messageId: info.messageId || null,
+    accepted: info.accepted || [],
+    rejected: info.rejected || [],
+    response: info.response || null,
+    previewUrl: info.previewUrl || null,
+    deliveryDurationMs: info.deliveryDurationMs || null,
+    attempts: info.attempts || 1,
   };
 }
 
@@ -78,11 +62,12 @@ export async function getHealth(req, res) {
   const isHealthy = await verifyTransporter();
   const configSummary = getMailerConfigSummary();
 
-  res.status(200).json({
-    success: isHealthy,
-    message: isHealthy ? 'SMTP Transporter is connected and healthy.' : 'SMTP Transporter connection failed.',
-    data: configSummary,
-  });
+  return ApiResponse.success(
+    res,
+    configSummary,
+    isHealthy ? 'SMTP Transporter is connected and healthy.' : 'SMTP Transporter connection failed.',
+    isHealthy ? 200 : 503
+  );
 }
 
 /**
@@ -102,7 +87,11 @@ export async function sendPlainText(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json(formatEmailResponse(result, 'Plain-text email sent successfully.'));
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    'Plain-text email sent successfully.'
+  );
 }
 
 /**
@@ -115,15 +104,14 @@ export async function sendHtml(req, res) {
   validateEmailPayload(req.body, { requireSubject: true, requireHtml: false });
 
   const { to, subject, replyTo, title, message, badge, actionUrl, actionText } = req.body;
-  
-  // If raw HTML is provided and isn't just a simple snippet, use it; otherwise generate a gorgeous modern email UI
+
   let html = req.body.html;
   if (!html || req.body.useTemplate === true || req.body.richUi === true) {
     html = renderPracticeEmailHtml({
       to,
-      title: title || subject || 'Nodemailer & SMTP Lab Practice',
+      title: title || subject || 'Farmanullah Ansari Company Official Communication',
       message: message || (typeof html === 'string' && html.trim().length > 0 ? html : undefined),
-      badge: badge || 'Direct Test Delivery',
+      badge: badge || 'Direct Delivery',
       actionUrl,
       actionText,
     });
@@ -138,7 +126,11 @@ export async function sendHtml(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json(formatEmailResponse(result, 'HTML email sent successfully with modern responsive UI.'));
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    'HTML email sent successfully with responsive corporate UI.'
+  );
 }
 
 /**
@@ -157,7 +149,113 @@ export async function sendTemplate(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json(formatEmailResponse(result, `Templated welcome email delivered to ${to}.`));
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    `Templated welcome email delivered to ${to}.`
+  );
+}
+
+/**
+ * POST /api/email/send-invoice
+ * Dispatches a corporate invoice / billing email with an itemized table.
+ * Body: { to, invoiceNumber?, customerName?, items?, dueDate?, status?, currency?, taxRate?, actionUrl?, notes? }
+ */
+export async function sendInvoice(req, res) {
+  validateEmailPayload(req.body, { requireSubject: false });
+
+  const {
+    to,
+    invoiceNumber,
+    customerName,
+    items,
+    dueDate,
+    status = 'PAID',
+    currency = '$',
+    taxRate = 0,
+    actionUrl,
+    notes,
+    replyTo,
+  } = req.body;
+
+  const result = await emailService.sendInvoiceEmail({
+    to,
+    invoiceNumber,
+    customerName: customerName || req.user?.name || 'Valued Client',
+    customerEmail: to,
+    items,
+    dueDate,
+    status,
+    currency,
+    taxRate,
+    actionUrl,
+    notes,
+    replyTo,
+    userId: req.user?.id,
+  });
+
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    `Corporate invoice email dispatched successfully to ${to}.`
+  );
+}
+
+/**
+ * POST /api/email/send-handlebars
+ * Dispatches an email using the dynamic Handlebars template engine.
+ * Body: { template: 'signup'|'loginAlert'|'otp'|'resetPassword', to, data: {}, subject?, replyTo? }
+ */
+export async function sendHandlebars(req, res) {
+  validateEmailPayload(req.body, { requireSubject: false });
+
+  const { template, to, data = {}, subject, replyTo } = req.body;
+  if (!template || typeof template !== 'string') {
+    throw ApiError.badRequest("A 'template' name is required (e.g. 'signup', 'loginAlert', 'otp', 'resetPassword').", 'MISSING_TEMPLATE');
+  }
+
+  const result = await emailService.sendHandlebarsEmail({
+    template,
+    data,
+    to,
+    subject,
+    replyTo,
+    userId: req.user?.id,
+  });
+
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    `Handlebars template '${template}' dispatched successfully to ${to}.`
+  );
+}
+
+/**
+ * POST /api/email/send-login-alert
+ * Dispatches an account login security alert notification.
+ * Body: { to, name?, device?, ipAddress?, location?, timestamp?, securityUrl? }
+ */
+export async function sendLoginAlert(req, res) {
+  validateEmailPayload(req.body, { requireSubject: false });
+
+  const { to, name, device, ipAddress, location, timestamp, securityUrl } = req.body;
+
+  const result = await emailService.sendLoginAlertEmail({
+    to,
+    name: name || req.user?.name || 'Account Owner',
+    device: device || req.headers['user-agent'] || 'Web Browser',
+    ipAddress: ipAddress || req.ip || '127.0.0.1',
+    location,
+    timestamp,
+    securityUrl,
+    userId: req.user?.id,
+  });
+
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    `Security login alert dispatched to ${to}.`
+  );
 }
 
 /**
@@ -167,10 +265,7 @@ export async function sendTemplate(req, res) {
  */
 export async function sendAttachment(req, res) {
   if (!req.file) {
-    const error = new Error("An attachment file is required in multipart field 'file'.");
-    error.status = 400;
-    error.field = 'file';
-    throw error;
+    throw ApiError.badRequest("An attachment file is required in multipart field 'file'.", 'MISSING_FILE');
   }
 
   validateEmailPayload(req.body, {
@@ -190,13 +285,17 @@ export async function sendAttachment(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json(formatEmailResponse(result, `Email with attachment '${req.file.originalname}' sent successfully.`));
+  return ApiResponse.success(
+    res,
+    buildDeliveryData(result),
+    `Email with attachment '${req.file.originalname}' sent successfully.`
+  );
 }
 
 /**
  * POST /api/email/send-bulk
- * Dispatches an email to multiple recipients concurrently using Promise.allSettled.
- * Body: { to: ["user1@example.com", "user2@example.com"], subject, text, html? }
+ * Dispatches an email to multiple recipients concurrently using throttled batches.
+ * Body: { to: ["user1@example.com", "user2@example.com"] | [{ email, name }], subject, text, html? }
  */
 export async function sendBulk(req, res) {
   validateEmailPayload(req.body, {
@@ -216,11 +315,11 @@ export async function sendBulk(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json({
-    success: result.failedCount === 0,
-    message: `Bulk transmission finished. Total: ${result.total}, Succeeded: ${result.successfulCount}, Failed: ${result.failedCount}`,
-    data: result,
-  });
+  return ApiResponse.success(
+    res,
+    result,
+    `Bulk transmission finished. Total: ${result.total}, Succeeded: ${result.successfulCount}, Failed: ${result.failedCount}`
+  );
 }
 
 /**
@@ -239,7 +338,7 @@ export async function sendOtp(req, res) {
   const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
   const expiresAt = new Date(Date.now() + expiryDuration * 60 * 1000);
 
-  // Invalidate any active, unverified OTPs for this email and purpose
+  // Invalidate active, unverified OTPs for this email and purpose
   await OtpLog.update(
     { isUsed: true },
     {
@@ -270,15 +369,14 @@ export async function sendOtp(req, res) {
     userId: req.user?.id,
   });
 
-  res.status(200).json(
-    formatEmailResponse(
-      {
-        ...result,
-        expiresInMinutes: expiryDuration,
-        purpose,
-      },
-      `Verification OTP email dispatched to ${to}.`
-    )
+  return ApiResponse.success(
+    res,
+    {
+      ...buildDeliveryData(result),
+      expiresInMinutes: expiryDuration,
+      purpose,
+    },
+    `Verification OTP email dispatched to ${to}.`
   );
 }
 
@@ -296,19 +394,16 @@ export async function verifyOtp(req, res) {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanOtp = String(otp).trim();
-  
-  // Build query: match email and unconsumed state
+
   const whereClause = {
     email: cleanEmail,
     isUsed: false,
   };
 
-  // If client explicitly specified a purpose, match it; otherwise find the most recent active OTP
   if (req.body.purpose && typeof req.body.purpose === 'string' && req.body.purpose.trim()) {
     whereClause.purpose = req.body.purpose.trim().toUpperCase();
   }
 
-  // Find latest active OTP record for this email
   const record = await OtpLog.findOne({
     where: whereClause,
     order: [['createdAt', 'DESC']],
@@ -325,7 +420,7 @@ export async function verifyOtp(req, res) {
     throw ApiError.badRequest('Verification code has expired. Please request a new code.', 'OTP_EXPIRED');
   }
 
-  // Rate Limiting / Brute-force protection: Max 5 failed attempts per OTP
+  // Brute-force protection: Max 5 failed attempts per OTP
   if (record.attempts >= 5) {
     record.isUsed = true;
     await record.save();
@@ -358,8 +453,135 @@ export async function verifyOtp(req, res) {
 }
 
 /**
+ * POST /api/email/preview
+ * Renders any registered email template in memory for preview without sending SMTP traffic.
+ * Body: { template: 'welcome'|'verification'|'reset-password'|'otp'|'invoice'|'direct', data: { ... } }
+ */
+export async function previewTemplate(req, res) {
+  const { template = 'welcome', data = {} } = req.body;
+
+  let rendered;
+  const cleanTemplate = template.toLowerCase().trim().replace(/^(hbs:|handlebars:|\/)/, '');
+
+  switch (cleanTemplate) {
+    case 'signup':
+    case 'welcome-hbs':
+      rendered = renderHandlebarsTemplate('signup', {
+        name: data.name || 'Farmanullah',
+        verificationUrl: data.verificationUrl || 'http://localhost:3000/api/auth/verify-email?token=example_token_123',
+        actionUrl: data.actionUrl || 'http://localhost:3000/get-started',
+        ...data,
+      });
+      break;
+    case 'loginalert':
+    case 'login-alert':
+    case 'security-alert':
+      rendered = renderHandlebarsTemplate('loginAlert', {
+        name: data.name || 'Farmanullah',
+        device: data.device || 'Chrome 128 on Windows 11',
+        ipAddress: data.ipAddress || '192.168.1.10',
+        location: data.location || 'Karachi, Pakistan',
+        timestamp: data.timestamp || new Date().toUTCString(),
+        securityUrl: data.securityUrl || 'http://localhost:3000/api/auth/forgot-password',
+        ...data,
+      });
+      break;
+    case 'otp-hbs':
+      rendered = renderHandlebarsTemplate('otp', {
+        otp: data.otp || '739201',
+        name: data.name || 'Farmanullah',
+        expiresInMinutes: data.expiresInMinutes || 10,
+        purpose: data.purpose || 'Two-Factor Authentication',
+        ...data,
+      });
+      break;
+    case 'resetpassword-hbs':
+    case 'reset-password-hbs':
+      rendered = renderHandlebarsTemplate('resetPassword', {
+        name: data.name || 'Farmanullah',
+        resetUrl: data.resetUrl || 'http://localhost:3000/api/auth/reset-password?token=example_token_123',
+        token: data.token || 'example_token_123',
+        ...data,
+      });
+      break;
+    case 'welcome':
+      rendered = renderWelcomeEmail(data);
+      break;
+    case 'verification':
+      rendered = renderVerificationEmail({
+        name: data.name || 'Farmanullah',
+        verificationUrl: data.verificationUrl || 'http://localhost:3000/api/auth/verify-email?token=example_token_123',
+        token: data.token || 'example_token_123',
+      });
+      break;
+    case 'reset-password':
+    case 'password-reset':
+      rendered = renderPasswordResetEmail({
+        name: data.name || 'Farmanullah',
+        resetUrl: data.resetUrl || 'http://localhost:3000/api/auth/reset-password?token=example_token_123',
+        token: data.token || 'example_token_123',
+      });
+      break;
+    case 'otp':
+      rendered = renderOtpEmail({
+        otp: data.otp || '849201',
+        name: data.name || 'Farmanullah',
+        expiresInMinutes: data.expiresInMinutes || 10,
+        purpose: data.purpose || 'Security Verification',
+      });
+      break;
+    case 'invoice':
+      rendered = renderInvoiceEmail(data);
+      break;
+    case 'direct':
+    case 'practice':
+      rendered = {
+        subject: data.title || 'Farmanullah Ansari Company Official Communication',
+        html: renderPracticeEmailHtml(data),
+        text: data.message || 'Official corporate notification.',
+      };
+      break;
+    default:
+      throw ApiError.badRequest(
+        `Unknown template '${template}'. Available: 'signup', 'login-alert', 'otp-hbs', 'reset-password-hbs', 'welcome', 'verification', 'reset-password', 'otp', 'invoice', 'direct'.`,
+        'INVALID_TEMPLATE_NAME'
+      );
+  }
+
+  return ApiResponse.success(
+    res,
+    {
+      template,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+    },
+    `Template '${template}' rendered successfully for preview.`
+  );
+}
+
+/**
+ * POST /api/email/logs/:id/retry
+ * Re-dispatches a previously recorded email log by ID.
+ */
+export async function retryFailedEmail(req, res) {
+  const id = Number(req.params.id);
+  if (!id) {
+    throw ApiError.badRequest('Valid numeric ID is required in URL parameter.');
+  }
+
+  const result = await emailService.retryEmailLog(id, req.user?.id, req.user?.role);
+
+  return ApiResponse.success(
+    res,
+    result,
+    `Email transmission for log #${id} was retried successfully.`
+  );
+}
+
+/**
  * GET /api/email/stats
- * Aggregates email analytics (total, accepted, failed, deliverability rate) from MSSQL.
+ * Aggregates email analytics (total, accepted, failed, deliverability rate, average latency, category breakdown) from MSSQL.
  */
 export async function getEmailStats(req, res) {
   const whereClause = {};
@@ -367,26 +589,45 @@ export async function getEmailStats(req, res) {
     whereClause.userId = req.user.id;
   }
 
-  const [total, accepted, failed, rejected] = await Promise.all([
+  const [total, accepted, failed, rejected, categoryStats, avgLatencyRow] = await Promise.all([
     EmailLog.count({ where: whereClause }),
     EmailLog.count({ where: { ...whereClause, status: 'ACCEPTED' } }),
     EmailLog.count({ where: { ...whereClause, status: 'FAILED' } }),
     EmailLog.count({ where: { ...whereClause, status: 'REJECTED' } }),
+    EmailLog.findAll({
+      attributes: ['category', [fn('COUNT', col('id')), 'count']],
+      where: whereClause,
+      group: ['category'],
+      raw: true,
+    }),
+    EmailLog.findAll({
+      attributes: [[fn('AVG', col('deliveryDurationMs')), 'avgDuration']],
+      where: { ...whereClause, status: 'ACCEPTED' },
+      raw: true,
+    }),
   ]);
 
   const deliverabilityRate = total > 0 ? Number(((accepted / total) * 100).toFixed(2)) : 100;
+  const avgLatencyMs = avgLatencyRow?.[0]?.avgDuration ? Math.round(Number(avgLatencyRow[0].avgDuration)) : 0;
 
-  res.status(200).json({
-    success: true,
-    message: 'Email delivery metrics retrieved successfully.',
-    data: {
+  const categories = {};
+  categoryStats.forEach((c) => {
+    categories[c.category] = Number(c.count);
+  });
+
+  return ApiResponse.success(
+    res,
+    {
       totalDispatched: total,
       accepted,
       failed,
       rejected,
       deliverabilityRate: `${deliverabilityRate}%`,
+      averageDeliveryDurationMs: avgLatencyMs,
+      byCategory: categories,
     },
-  });
+    'Email delivery metrics retrieved successfully.'
+  );
 }
 
 /**
@@ -409,16 +650,12 @@ export async function getLogById(req, res) {
     throw ApiError.forbidden('You are not authorized to view this email log.');
   }
 
-  res.status(200).json({
-    success: true,
-    message: 'Email log retrieved.',
-    data: log,
-  });
+  return ApiResponse.success(res, log, 'Email log retrieved.');
 }
 
 /**
  * GET /api/email/logs
- * Fetches recent email dispatch logs stored in MSSQL.
+ * Fetches recent email dispatch logs stored in MSSQL with search and filter capabilities.
  */
 export async function getEmailLogs(req, res) {
   const result = await emailService.getEmailLogs({
@@ -427,12 +664,17 @@ export async function getEmailLogs(req, res) {
     page: req.query.page,
     limit: req.query.limit,
     status: req.query.status,
+    category: req.query.category,
+    search: req.query.search,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
   });
 
-  res.status(200).json({
-    success: true,
-    message: `Retrieved ${result.logs.length} email dispatch logs from database.`,
-    data: result.logs,
-    meta: result.pagination,
-  });
+  return ApiResponse.success(
+    res,
+    result.logs,
+    `Retrieved ${result.logs.length} email dispatch logs from database.`,
+    200,
+    result.pagination
+  );
 }

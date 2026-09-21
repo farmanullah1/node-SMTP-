@@ -8,10 +8,15 @@ import {
   sendPlainText,
   sendHtml,
   sendTemplate,
+  sendHandlebars,
+  sendLoginAlert,
+  sendInvoice,
   sendAttachment,
   sendBulk,
   sendOtp,
   verifyOtp,
+  previewTemplate,
+  retryFailedEmail,
   getEmailStats,
   getLogById,
   getEmailLogs,
@@ -35,30 +40,41 @@ const upload = multer({
 // 1. Health check & Transporter verification
 router.get('/health', asyncHandler(getHealth));
 
-// 2. Email deliverability statistics & analytics
+// 2. Email deliverability statistics & analytics (category breakdown, latency)
 router.get('/stats', optionalAuth, asyncHandler(getEmailStats));
 
-// 3. Audit logs from MSSQL database (supports optional Bearer token)
+// 3. Audit logs from MSSQL database (supports search, category, date filters, and retry)
 router.get('/logs', optionalAuth, asyncHandler(getEmailLogs));
 router.get('/logs/:id', optionalAuth, asyncHandler(getLogById));
+router.post('/logs/:id/retry', emailLimiter, optionalAuth, asyncHandler(retryFailedEmail));
 
-// 4. Plain-text email
+// 4. In-memory email template preview / HTML inspector (supports Handlebars & classic)
+router.post('/preview', emailLimiter, asyncHandler(previewTemplate));
+
+// 5. Dynamic Handlebars email template delivery (signup, loginAlert, otp, resetPassword)
+router.post('/send-handlebars', emailLimiter, optionalAuth, asyncHandler(sendHandlebars));
+router.post('/send-login-alert', emailLimiter, optionalAuth, asyncHandler(sendLoginAlert));
+
+// 6. Plain-text email
 router.post('/send', emailLimiter, optionalAuth, asyncHandler(sendPlainText));
 
-// 5. Rich HTML email (with automatic text fallback & modern UI)
+// 7. Rich HTML email (with automatic text fallback & corporate UI)
 router.post('/send-html', emailLimiter, optionalAuth, asyncHandler(sendHtml));
 
-// 6. Security 6-digit OTP email & verification
+// 8. Security 6-digit OTP email & verification
 router.post('/send-otp', emailLimiter, optionalAuth, asyncHandler(sendOtp));
 router.post('/verify-otp', emailLimiter, asyncHandler(verifyOtp));
 
-// 7. Templated welcome email
+// 9. Templated welcome email
 router.post('/send-template', emailLimiter, optionalAuth, asyncHandler(sendTemplate));
 
-// 8. Email with file attachment (multipart/form-data)
+// 10. Itemized corporate invoice / transaction billing email
+router.post('/send-invoice', emailLimiter, optionalAuth, asyncHandler(sendInvoice));
+
+// 11. Email with file attachment (multipart/form-data)
 router.post('/send-attachment', emailLimiter, optionalAuth, upload.single('file'), asyncHandler(sendAttachment));
 
-// 9. Concurrent bulk email sending
+// 12. Concurrent & deduplicated bulk email sending
 router.post('/send-bulk', emailLimiter, optionalAuth, asyncHandler(sendBulk));
 
 export default router;

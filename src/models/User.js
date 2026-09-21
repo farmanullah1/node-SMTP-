@@ -99,6 +99,11 @@ User.init(
     sequelize,
     tableName: 'Users',
     timestamps: true,
+    indexes: [
+      { fields: ['role'] },
+      { fields: ['isVerified'] },
+      { fields: ['createdAt'] },
+    ],
     hooks: {
       beforeSave: async (user) => {
         if (user.changed('password')) {

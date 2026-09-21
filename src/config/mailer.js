@@ -81,15 +81,27 @@ export async function getTransporter() {
       from: MAIL_FROM || SMTP_USER,
       // Production pool and timeout settings
       pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
+      maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS) || 5,
+      maxMessages: Number(process.env.SMTP_MAX_MESSAGES) || 100,
+      rateDelta: Number(process.env.SMTP_RATE_DELTA_MS) || 1000,
+      rateLimit: Number(process.env.SMTP_RATE_LIMIT) || 5,
       connectionTimeout: 10000, // 10 seconds
       greetingTimeout: 5000,     // 5 seconds
       socketTimeout: 15000,      // 15 seconds
     };
 
+    // Optional DKIM signing configuration
+    if (process.env.DKIM_DOMAIN && process.env.DKIM_KEY_SELECTOR && process.env.DKIM_PRIVATE_KEY) {
+      activeConfig.dkim = {
+        domainName: process.env.DKIM_DOMAIN,
+        keySelector: process.env.DKIM_KEY_SELECTOR,
+        privateKey: process.env.DKIM_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      };
+      console.log(`[Mailer] DKIM signing enabled for domain: ${process.env.DKIM_DOMAIN}`);
+    }
+
     transporter = nodemailer.createTransport(activeConfig);
-    console.log(`[Mailer] Configured SMTP Transport via ${activeConfig.host}:${activeConfig.port} (secure: ${activeConfig.secure})`);
+    console.log(`[Mailer] Configured SMTP Transport via ${activeConfig.host}:${activeConfig.port} (secure: ${activeConfig.secure}, pool: true)`);
   } else {
     // Ephemeral Ethereal Fallback
     console.log('[Mailer] No custom SMTP credentials detected in environment.');
@@ -133,6 +145,22 @@ export async function getTransporter() {
 }
 
 /**
+ * Closes the active transporter connection pool and clears the cached singleton.
+ * Useful for runtime credential reloads or recovering from connection errors.
+ */
+export function resetTransporter() {
+  if (transporter && typeof transporter.close === 'function') {
+    try {
+      transporter.close();
+    } catch (_) {}
+  }
+  transporter = null;
+  activeConfig = null;
+  isEthereal = false;
+  console.log('[Mailer] Transporter pool closed and reset.');
+}
+
+/**
  * Validates the SMTP connection by establishing a handshake and authenticating.
  * Uses transporter.verify() which issues an EHLO and AUTH sequence.
  * 
@@ -150,6 +178,50 @@ export async function verifyTransporter() {
       resolve(success);
     });
   });
+}
+
+/**
+ * Deep diagnostic probe for SMTP connection.
+ * Measures handshake latency, verifies socket capabilities, and returns connection telemetry.
+ * 
+ * @returns {Promise<{ healthy: boolean, latencyMs: number, host: string, port: number, secure: boolean, pool: boolean, isEthereal: boolean, error: string|null }>}
+ */
+export async function diagnoseSmtpConnection() {
+  const start = Date.now();
+  try {
+    const currentTransporter = await getTransporter();
+    await new Promise((resolve, reject) => {
+      currentTransporter.verify((error, success) => {
+        if (error) return reject(error);
+        resolve(success);
+      });
+    });
+
+    const latencyMs = Date.now() - start;
+    return {
+      healthy: true,
+      latencyMs,
+      host: activeConfig.host,
+      port: activeConfig.port,
+      secure: activeConfig.secure,
+      pool: !isEthereal,
+      rateLimit: activeConfig.rateLimit || null,
+      rateDeltaMs: activeConfig.rateDelta || null,
+      isEthereal,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      latencyMs: Date.now() - start,
+      host: activeConfig?.host || 'unknown',
+      port: activeConfig?.port || 0,
+      secure: activeConfig?.secure || false,
+      pool: !isEthereal,
+      isEthereal,
+      error: error.message,
+    };
+  }
 }
 
 /**
@@ -182,10 +254,15 @@ export function getMailerConfigSummary() {
     host: activeConfig.host,
     port: activeConfig.port,
     secure: activeConfig.secure,
+    pool: !isEthereal,
+    maxConnections: activeConfig.maxConnections || 1,
+    rateLimit: activeConfig.rateLimit || undefined,
     user: activeConfig.auth?.user ? `${activeConfig.auth.user.slice(0, 4)}***` : undefined,
     from: activeConfig.from,
+    dkimConfigured: !!activeConfig.dkim,
     webInbox: isEthereal ? activeConfig.webUrl : undefined,
   };
 }
 
 export { isEthereal };
+

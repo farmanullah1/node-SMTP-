@@ -1,8 +1,11 @@
+import { Op } from 'sequelize';
 import { getTransporter, getPreviewUrl } from '../config/mailer.js';
 import { EmailLog } from '../models/EmailLog.js';
 import { renderWelcomeEmail } from '../templates/welcomeEmail.js';
 import { renderVerificationEmail, renderPasswordResetEmail } from '../templates/authEmails.js';
 import { renderOtpEmail } from '../templates/otpEmail.js';
+import { renderInvoiceEmail } from '../templates/invoiceEmail.js';
+import { renderHandlebarsTemplate } from '../templates/handlebars/renderer.js';
 
 /**
  * ============================================================================
@@ -12,9 +15,12 @@ import { renderOtpEmail } from '../templates/otpEmail.js';
  * Features:
  * - Nodemailer transport pooling & fallback management
  * - Transient error retry mechanism with exponential backoff
+ * - Delivery latency tracking & retry counting in MSSQL audit logs
+ * - Category classification (WELCOME, INVOICE, OTP, AUTH, BULK, etc.)
  * - Multipart/alternative plain-text fallback generation
- * - Batching / concurrency throttling for bulk email dispatch
- * - Non-blocking MSSQL delivery audit persistence
+ * - Batching / concurrency throttling & deduplication for bulk email dispatch
+ * - Non-blocking MSSQL delivery audit persistence with indexed columns
+ * - Live log filtering, searching, and resend/retry capabilities
  * - Sandbox recipient redirection for Mailtrap demomailtrap.co
  * ============================================================================
  */
@@ -23,13 +29,30 @@ import { renderOtpEmail } from '../templates/otpEmail.js';
  * Non-blocking database audit logger.
  * Records delivery metadata into MSSQL without halting the email response flow.
  */
-async function recordAuditLog({ userId, recipient, subject, status, messageId, providerResponse, previewUrl, errorMessage }) {
+async function recordAuditLog({
+  userId,
+  recipient,
+  subject,
+  status,
+  messageId,
+  providerResponse,
+  previewUrl,
+  errorMessage,
+  category = 'CUSTOM',
+  deliveryDurationMs = null,
+  attempts = 1,
+  metadata = null,
+}) {
   try {
     await EmailLog.create({
       userId: userId || null,
       recipient,
       subject,
       status,
+      category: category || 'CUSTOM',
+      deliveryDurationMs: deliveryDurationMs !== null ? Math.round(deliveryDurationMs) : null,
+      attempts: attempts || 1,
+      metadata: typeof metadata === 'object' && metadata !== null ? JSON.stringify(metadata) : metadata,
       messageId: messageId || null,
       providerResponse: typeof providerResponse === 'string' ? providerResponse : JSON.stringify(providerResponse),
       previewUrl: previewUrl || null,
@@ -47,6 +70,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Sends an email with an automatic retry policy for transient SMTP/network errors.
+ * Returns { info, attempts } upon success.
  */
 async function dispatchWithRetry(transporter, mailOptions, maxRetries = 2) {
   let attempt = 0;
@@ -54,7 +78,8 @@ async function dispatchWithRetry(transporter, mailOptions, maxRetries = 2) {
 
   while (attempt <= maxRetries) {
     try {
-      return await transporter.sendMail(mailOptions);
+      const info = await transporter.sendMail(mailOptions);
+      return { info, attempts: attempt + 1 };
     } catch (error) {
       attempt++;
       const isTransient = transientErrorCodes.includes(error.code);
@@ -64,6 +89,7 @@ async function dispatchWithRetry(transporter, mailOptions, maxRetries = 2) {
         console.warn(`[EmailService] Transient SMTP error (${error.code}). Retrying attempt ${attempt}/${maxRetries} in ${delayMs}ms...`);
         await sleep(delayMs);
       } else {
+        error.attempts = attempt;
         throw error;
       }
     }
@@ -81,9 +107,12 @@ async function dispatchWithRetry(transporter, mailOptions, maxRetries = 2) {
  * @param {Array}  [options.attachments] - Array of attachment objects
  * @param {string} [options.replyTo] - Reply-to email address
  * @param {number} [options.userId] - Optional authenticated user ID for database tracking
- * @returns {Promise<{ messageId: string, accepted: string[], rejected: string[], response: string, previewUrl: string|null }>}
+ * @param {string} [options.category='CUSTOM'] - Email category
+ * @param {object|string} [options.metadata] - Optional arbitrary tracking metadata
+ * @returns {Promise<{ messageId: string, accepted: string[], rejected: string[], response: string, previewUrl: string|null, deliveryDurationMs: number, attempts: number }>}
  */
-export async function sendEmail({ to, subject, text, html, attachments, replyTo, userId }) {
+export async function sendEmail({ to, subject, text, html, attachments, replyTo, userId, category = 'CUSTOM', metadata }) {
+  const startTime = Date.now();
   const transporter = await getTransporter();
 
   // Ensure multipart/alternative: strip tags if text alternative is missing
@@ -128,7 +157,8 @@ export async function sendEmail({ to, subject, text, html, attachments, replyTo,
   };
 
   try {
-    const info = await dispatchWithRetry(transporter, mailOptions);
+    const { info, attempts } = await dispatchWithRetry(transporter, mailOptions);
+    const deliveryDurationMs = Date.now() - startTime;
     const previewUrl = getPreviewUrl(info);
 
     // Asynchronously record success in MSSQL
@@ -137,6 +167,10 @@ export async function sendEmail({ to, subject, text, html, attachments, replyTo,
       recipient: to,
       subject,
       status: 'ACCEPTED',
+      category,
+      deliveryDurationMs,
+      attempts,
+      metadata,
       messageId: info.messageId,
       providerResponse: info.response,
       previewUrl,
@@ -148,14 +182,21 @@ export async function sendEmail({ to, subject, text, html, attachments, replyTo,
       rejected: info.rejected || [],
       response: info.response || null,
       previewUrl,
+      deliveryDurationMs,
+      attempts,
     };
   } catch (error) {
+    const deliveryDurationMs = Date.now() - startTime;
     // Record failure in MSSQL
     recordAuditLog({
       userId,
       recipient: to,
       subject,
       status: 'FAILED',
+      category,
+      deliveryDurationMs,
+      attempts: error.attempts || 1,
+      metadata,
       errorMessage: error.message,
     });
 
@@ -166,23 +207,23 @@ export async function sendEmail({ to, subject, text, html, attachments, replyTo,
 /**
  * Sends a plain-text email.
  */
-export async function sendPlainTextEmail({ to, subject, text, replyTo, userId }) {
-  return sendEmail({ to, subject, text, replyTo, userId });
+export async function sendPlainTextEmail({ to, subject, text, replyTo, userId, metadata }) {
+  return sendEmail({ to, subject, text, replyTo, userId, category: 'DIRECT', metadata });
 }
 
 /**
  * Sends a rich HTML email with automatic plain-text fallback.
  */
-export async function sendHtmlEmail({ to, subject, html, text, replyTo, userId }) {
-  return sendEmail({ to, subject, html, text, replyTo, userId });
+export async function sendHtmlEmail({ to, subject, html, text, replyTo, userId, metadata }) {
+  return sendEmail({ to, subject, html, text, replyTo, userId, category: 'DIRECT', metadata });
 }
 
 /**
  * Sends the welcome email template.
  */
-export async function sendWelcomeEmail({ to, name, replyTo, userId }) {
+export async function sendWelcomeEmail({ to, name, replyTo, userId, metadata }) {
   const { subject, html, text } = renderWelcomeEmail({ name });
-  return sendEmail({ to, subject, html, text, replyTo, userId });
+  return sendEmail({ to, subject, html, text, replyTo, userId, category: 'WELCOME', metadata });
 }
 
 /**
@@ -190,7 +231,7 @@ export async function sendWelcomeEmail({ to, name, replyTo, userId }) {
  */
 export async function sendVerificationEmail({ to, name, verificationUrl, token, userId }) {
   const { subject, html, text } = renderVerificationEmail({ name, verificationUrl, token });
-  return sendEmail({ to, subject, html, text, userId });
+  return sendEmail({ to, subject, html, text, userId, category: 'AUTH_VERIFICATION' });
 }
 
 /**
@@ -198,7 +239,7 @@ export async function sendVerificationEmail({ to, name, verificationUrl, token, 
  */
 export async function sendPasswordResetEmail({ to, name, resetUrl, token, userId }) {
   const { subject, html, text } = renderPasswordResetEmail({ name, resetUrl, token });
-  return sendEmail({ to, subject, html, text, userId });
+  return sendEmail({ to, subject, html, text, userId, category: 'AUTH_RESET' });
 }
 
 /**
@@ -206,13 +247,96 @@ export async function sendPasswordResetEmail({ to, name, resetUrl, token, userId
  */
 export async function sendOtpEmail({ to, otp, name, expiresInMinutes = 10, purpose = 'Verification', userId }) {
   const { subject, html, text } = renderOtpEmail({ otp, name, expiresInMinutes, purpose });
-  return sendEmail({ to, subject, html, text, userId });
+  return sendEmail({ to, subject, html, text, userId, category: 'OTP' });
+}
+
+/**
+ * Sends an official Corporate Invoice / Billing email.
+ */
+export async function sendInvoiceEmail({
+  to,
+  invoiceNumber,
+  customerName,
+  customerEmail,
+  issueDate,
+  dueDate,
+  status,
+  currency,
+  items,
+  taxRate,
+  actionUrl,
+  notes,
+  replyTo,
+  userId,
+  metadata,
+}) {
+  const { subject, html, text } = renderInvoiceEmail({
+    invoiceNumber,
+    customerName,
+    customerEmail: customerEmail || to,
+    issueDate,
+    dueDate,
+    status,
+    currency,
+    items,
+    taxRate,
+    actionUrl,
+    notes,
+  });
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+    replyTo,
+    userId,
+    category: 'INVOICE',
+    metadata,
+  });
+}
+
+/**
+ * Dispatches an email rendered via the Handlebars dynamic template engine.
+ */
+export async function sendHandlebarsEmail({ template, data = {}, to, subject, replyTo, userId, category, metadata }) {
+  const rendered = renderHandlebarsTemplate(template, data);
+  return sendEmail({
+    to,
+    subject: subject || rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    replyTo,
+    userId,
+    category: category || `HBS_${template.toUpperCase()}`,
+    metadata: { ...metadata, templateEngine: 'handlebars', templateName: template },
+  });
+}
+
+/**
+ * Dispatches a Security Login Notification email when an account login is detected.
+ */
+export async function sendLoginAlertEmail({ to, name, device, ipAddress, location, timestamp, securityUrl, userId }) {
+  return sendHandlebarsEmail({
+    template: 'loginAlert',
+    data: {
+      name,
+      device,
+      ipAddress,
+      location,
+      timestamp: timestamp || new Date().toUTCString(),
+      securityUrl,
+    },
+    to,
+    category: 'SECURITY_ALERT',
+    userId,
+  });
 }
 
 /**
  * Sends an email with an uploaded attachment buffer.
  */
-export async function sendAttachmentEmail({ to, subject, file, text, html, replyTo, userId }) {
+export async function sendAttachmentEmail({ to, subject, file, text, html, replyTo, userId, metadata }) {
   const attachments = file
     ? [
         {
@@ -231,6 +355,8 @@ export async function sendAttachmentEmail({ to, subject, file, text, html, reply
     attachments,
     replyTo,
     userId,
+    category: 'ATTACHMENT',
+    metadata,
   });
 }
 
@@ -238,46 +364,67 @@ export async function sendAttachmentEmail({ to, subject, file, text, html, reply
  * Dispatches emails to multiple recipients in throttled batches to protect SMTP socket limits
  * and avoid provider rate-limit rejections.
  * 
+ * Supports deduplication and per-recipient customized payloads.
+ * 
  * @param {object} options
- * @param {string[]} options.to - Array of recipient emails
- * @param {string} options.subject
+ * @param {Array<string|object>} options.to - Array of recipient emails or objects ({ email, name, subject?, text?, html? })
+ * @param {string} [options.subject]
  * @param {string} [options.text]
  * @param {string} [options.html]
  * @param {string} [options.replyTo]
  * @param {number} [options.userId]
- * @param {number} [options.concurrency] - Simultaneous emails per batch (default 5)
+ * @param {number} [options.concurrency=5] - Simultaneous emails per batch
  */
-export async function sendBulkEmails({ to: recipients, subject, text, html, replyTo, userId, concurrency = 5 }) {
+export async function sendBulkEmails({ to: rawRecipients, subject, text, html, replyTo, userId, concurrency = 5 }) {
   const successful = [];
   const failed = [];
 
-  // Chunk recipients into batches of size = concurrency
-  for (let i = 0; i < recipients.length; i += concurrency) {
-    const batch = recipients.slice(i, i + concurrency);
+  // Deduplicate and normalize recipients
+  const seenEmails = new Set();
+  const normalizedRecipients = [];
 
-    const batchPromises = batch.map((recipient) =>
-      sendEmail({
-        to: recipient,
-        subject,
-        text,
-        html,
+  for (const item of rawRecipients) {
+    const targetEmail = typeof item === 'string' ? item.trim().toLowerCase() : item?.email?.trim().toLowerCase();
+    if (!targetEmail || seenEmails.has(targetEmail)) continue;
+
+    seenEmails.add(targetEmail);
+    normalizedRecipients.push(typeof item === 'string' ? { email: targetEmail } : { ...item, email: targetEmail });
+  }
+
+  // Chunk recipients into batches of size = concurrency
+  for (let i = 0; i < normalizedRecipients.length; i += concurrency) {
+    const batch = normalizedRecipients.slice(i, i + concurrency);
+
+    const batchPromises = batch.map((item) => {
+      const recipientEmail = item.email;
+      const targetSubject = item.subject || subject;
+      const targetText = item.text || text;
+      const targetHtml = item.html || html;
+
+      return sendEmail({
+        to: recipientEmail,
+        subject: targetSubject,
+        text: targetText,
+        html: targetHtml,
         replyTo,
         userId,
+        category: 'BULK',
+        metadata: { bulkBatchIndex: Math.floor(i / concurrency) + 1 },
       }).then((result) => ({
-        to: recipient,
+        to: recipientEmail,
         ...result,
-      }))
-    );
+      }));
+    });
 
     const settled = await Promise.allSettled(batchPromises);
 
     settled.forEach((res, idx) => {
-      const recipient = batch[idx];
+      const item = batch[idx];
       if (res.status === 'fulfilled') {
         successful.push(res.value);
       } else {
         failed.push({
-          to: recipient,
+          to: item.email,
           error: res.reason?.message || 'Failed to dispatch email',
           code: res.reason?.code || 'SEND_ERROR',
         });
@@ -285,13 +432,13 @@ export async function sendBulkEmails({ to: recipients, subject, text, html, repl
     });
 
     // Small delay between batches if more remain
-    if (i + concurrency < recipients.length) {
+    if (i + concurrency < normalizedRecipients.length) {
       await sleep(150);
     }
   }
 
   return {
-    total: recipients.length,
+    total: normalizedRecipients.length,
     successfulCount: successful.length,
     failedCount: failed.length,
     successful,
@@ -300,9 +447,19 @@ export async function sendBulkEmails({ to: recipients, subject, text, html, repl
 }
 
 /**
- * Queries email logs from MSSQL database with user filtering and structured pagination.
+ * Queries email logs from MSSQL database with search, category filtering, and structured pagination.
  */
-export async function getEmailLogs({ userId, role, page = 1, limit = 20, status = null }) {
+export async function getEmailLogs({
+  userId,
+  role,
+  page = 1,
+  limit = 20,
+  status = null,
+  category = null,
+  search = null,
+  startDate = null,
+  endDate = null,
+}) {
   const safePage = Math.max(Number(page) || 1, 1);
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const offset = (safePage - 1) * safeLimit;
@@ -316,6 +473,31 @@ export async function getEmailLogs({ userId, role, page = 1, limit = 20, status 
 
   if (status) {
     whereClause.status = String(status).toUpperCase();
+  }
+
+  if (category) {
+    whereClause.category = String(category).toUpperCase();
+  }
+
+  // Date range filtering
+  if (startDate || endDate) {
+    whereClause.createdAt = {};
+    if (startDate) {
+      whereClause.createdAt[Op.gte] = new Date(startDate);
+    }
+    if (endDate) {
+      whereClause.createdAt[Op.lte] = new Date(endDate);
+    }
+  }
+
+  // Full-text / substring search across recipient, subject, or messageId
+  if (search && typeof search === 'string' && search.trim().length > 0) {
+    const term = `%${search.trim()}%`;
+    whereClause[Op.or] = [
+      { recipient: { [Op.like]: term } },
+      { subject: { [Op.like]: term } },
+      { messageId: { [Op.like]: term } },
+    ];
   }
 
   const { count, rows } = await EmailLog.findAndCountAll({
@@ -340,6 +522,45 @@ export async function getEmailLogs({ userId, role, page = 1, limit = 20, status 
   };
 }
 
+/**
+ * Retries sending an email based on a previous EmailLog record.
+ * 
+ * @param {number} logId 
+ * @param {number} [userId] 
+ * @param {string} [role] 
+ * @returns {Promise<object>}
+ */
+export async function retryEmailLog(logId, userId = null, role = null) {
+  const log = await EmailLog.findByPk(logId);
+  if (!log) {
+    const err = new Error(`Email log #${logId} not found.`);
+    err.status = 404;
+    throw err;
+  }
+
+  // Security check: non-admins can only retry their own logs
+  if (userId && role !== 'admin' && log.userId !== userId) {
+    const err = new Error('You are not authorized to retry this email transmission.');
+    err.status = 403;
+    throw err;
+  }
+
+  // Re-dispatch
+  const result = await sendEmail({
+    to: log.recipient,
+    subject: log.subject,
+    text: `Re-transmission of: ${log.subject}`,
+    userId: log.userId,
+    category: log.category,
+    metadata: { retriedFromLogId: log.id },
+  });
+
+  return {
+    originalLogId: log.id,
+    newTransmission: result,
+  };
+}
+
 export default {
   sendEmail,
   sendPlainTextEmail,
@@ -348,7 +569,12 @@ export default {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOtpEmail,
+  sendInvoiceEmail,
+  sendHandlebarsEmail,
+  sendLoginAlertEmail,
   sendAttachmentEmail,
   sendBulkEmails,
   getEmailLogs,
+  retryEmailLog,
 };
+

@@ -258,7 +258,85 @@ curl -X POST http://localhost:3000/api/email/send-template \
   }'
 ```
 
-#### 6. Send Email with Attachment (Multipart)
+#### 6. Send Dynamic Handlebars Template (with main.handlebars layout)
+Dispatches emails dynamically compiled using the file-based Handlebars engine:
+```bash
+curl -X POST http://localhost:3000/api/email/send-handlebars \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "client@example.com",
+    "template": "signup",
+    "data": {
+      "name": "Jane Developer",
+      "verificationUrl": "http://localhost:3000/api/auth/verify-email?token=xyz",
+      "actionUrl": "http://localhost:3000/dashboard"
+    }
+  }'
+```
+*Supported templates:* `signup`, `loginAlert`, `otp`, `resetPassword`.
+
+#### 7. Send Security Login Alert Notification
+Dispatches a device & IP security alert when an account sign-in occurs:
+```bash
+curl -X POST http://localhost:3000/api/email/send-login-alert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "client@example.com",
+    "name": "Jane Developer",
+    "device": "Chrome 128 on macOS Sonoma",
+    "ipAddress": "198.51.100.42",
+    "location": "New York, USA",
+    "securityUrl": "http://localhost:3000/api/auth/forgot-password"
+  }'
+```
+
+#### 8. Send Itemized Corporate Invoice / Billing Email
+Dispatches a modern, responsive transaction receipt matching the corporate brand design:
+```bash
+curl -X POST http://localhost:3000/api/email/send-invoice \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "client@example.com",
+    "customerName": "Jane Developer",
+    "invoiceNumber": "INV-2026-0842",
+    "items": [
+      { "description": "Cloud SMTP Relay Service", "quantity": 1, "unitPrice": 120.00 },
+      { "description": "Dedicated IP Warmup", "quantity": 1, "unitPrice": 45.00 }
+    ],
+    "taxRate": 0.05,
+    "status": "PAID"
+  }'
+```
+
+#### 7. In-Memory Template Preview & HTML Inspector (Zero SMTP Traffic)
+Inspect rendered responsive HTML and plain-text alternatives before sending:
+```bash
+curl -X POST http://localhost:3000/api/email/preview \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "invoice",
+    "data": {
+      "customerName": "Jane Developer",
+      "invoiceNumber": "INV-PREVIEW-001"
+    }
+  }'
+```
+*Supported templates:* `welcome`, `invoice`, `otp`, `verification`, `reset-password`, `direct`.
+
+#### 8. Retry Failed Email Transmission
+Resends any previously recorded email audit log by ID:
+```bash
+curl -X POST http://localhost:3000/api/email/logs/12/retry \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>"
+```
+
+#### 9. Query & Filter Delivery Audit Logs
+Filter by search terms, status, category, or date range:
+```bash
+curl -X GET "http://localhost:3000/api/email/logs?page=1&limit=20&search=client@example.com&category=INVOICE&status=ACCEPTED"
+```
+
+#### 10. Send Email with Attachment (Multipart)
 ```bash
 echo "Sample file content" > test.txt
 
@@ -268,7 +346,7 @@ curl -X POST http://localhost:3000/api/email/send-attachment \
   -F "file=@test.txt"
 ```
 
-#### 7. Concurrent Bulk Dispatch (Promise.allSettled)
+#### 11. Concurrent Bulk Dispatch (with Deduplication & Throttling)
 ```bash
 curl -X POST http://localhost:3000/api/email/send-bulk \
   -H "Content-Type: application/json" \

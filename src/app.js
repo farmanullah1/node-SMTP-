@@ -52,6 +52,8 @@ app.get('/', (req, res) => {
       endpoints: {
         system: {
           health: 'GET /api/system/health',
+          smtpDiag: 'GET /api/system/smtp-diag',
+          validateDomain: 'POST /api/system/validate-domain',
         },
         auth: {
           register: 'POST /api/auth/register',
@@ -68,13 +70,18 @@ app.get('/', (req, res) => {
         email: {
           health: 'GET /api/email/health',
           stats: 'GET /api/email/stats',
-          logs: 'GET /api/email/logs?page=1&limit=20',
+          logs: 'GET /api/email/logs?page=1&limit=20&search=&category=&status=',
           logById: 'GET /api/email/logs/:id',
+          retryLog: 'POST /api/email/logs/:id/retry',
+          preview: 'POST /api/email/preview (template: signup|loginAlert|otp|resetPassword|invoice|welcome|verification)',
+          sendHandlebars: 'POST /api/email/send-handlebars (template: signup|loginAlert|otp|resetPassword, to, data)',
+          sendLoginAlert: 'POST /api/email/send-login-alert (to, name, device, ipAddress, location)',
           sendText: 'POST /api/email/send',
           sendHtml: 'POST /api/email/send-html',
           sendOtp: 'POST /api/email/send-otp',
           verifyOtp: 'POST /api/email/verify-otp',
           sendTemplate: 'POST /api/email/send-template',
+          sendInvoice: 'POST /api/email/send-invoice',
           sendAttachment: 'POST /api/email/send-attachment',
           sendBulk: 'POST /api/email/send-bulk',
         },

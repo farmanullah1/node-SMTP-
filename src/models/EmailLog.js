@@ -35,6 +35,24 @@ export const EmailLog = sequelize.define('EmailLog', {
       },
     },
   },
+  category: {
+    type: DataTypes.STRING(50),
+    defaultValue: 'CUSTOM',
+    allowNull: false,
+  },
+  deliveryDurationMs: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  attempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    allowNull: false,
+  },
+  metadata: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
   messageId: {
     type: DataTypes.STRING(255),
     allowNull: true,
@@ -54,4 +72,12 @@ export const EmailLog = sequelize.define('EmailLog', {
 }, {
   tableName: 'EmailLogs',
   timestamps: true,
+  indexes: [
+    { fields: ['userId'] },
+    { fields: ['recipient'] },
+    { fields: ['status'] },
+    { fields: ['category'] },
+    { fields: ['createdAt'] },
+    { fields: ['messageId'] },
+  ],
 });
